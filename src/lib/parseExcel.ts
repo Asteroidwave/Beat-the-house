@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
-import { Connection, HorseEntry, RaceInfo } from '@/types';
+import { Connection, HorseEntry, RaceInfo, OddsBucketStats } from '@/types';
+import { buildOddsBucketStats, getHorseStats } from './oddsStatistics';
 
 interface RawHorseRow {
   Date: string;
@@ -12,6 +13,8 @@ interface RawHorseRow {
   'Sire 2'?: string;
   'OG M/L': string;
   'OG M/L Dec': number;
+  'New M/L'?: string;
+  'New M/L Dec'?: number;
   'New Sal.': number;
   Finish: number;
   'Total Points': number;
@@ -60,6 +63,7 @@ let cachedData: {
     trainers: Map<string, { avpa90d: number }>;
     sires: Map<string, { avpa90d: number }>;
   };
+  oddsBucketStats: Map<string, OddsBucketStats>;
 } | null = null;
 
 export async function loadExcelData() {
@@ -73,7 +77,8 @@ export async function loadExcelData() {
   const horsesSheet = workbook.Sheets['Horses'];
   const horsesRaw: RawHorseRow[] = XLSX.utils.sheet_to_json(horsesSheet);
 
-  const horses: HorseEntry[] = horsesRaw.map((row) => ({
+  // First pass: create horses without stats for bucket calculation
+  const horsesWithoutStats = horsesRaw.map((row) => ({
     date: row.Date,
     race: row.Race,
     horse: row.Horse,
@@ -83,15 +88,34 @@ export async function loadExcelData() {
     sire1: row['Sire 1'],
     sire2: row['Sire 2'],
     mlOdds: row['OG M/L'],
-    mlOddsDecimal: row['OG M/L Dec'],
+    mlOddsDecimal: row['OG M/L Dec'] || 0,
+    newMlOdds: row['New M/L'],
+    newMlOddsDecimal: row['New M/L Dec'],
     salary: row['New Sal.'] || 0,
-    finish: row.Finish,
+    finish: row.Finish || 0,
     totalPoints: row['Total Points'] || 0,
     avpa: row.AVPA || 0,
     raceAvpa: row['Race AVPA'] || 0,
     trackAvpa: row['Track AVPA'] || 0,
     isScratched: row.Horse?.includes('SCR') || row.Finish === 0 || !row.Finish,
   }));
+
+  // Build odds bucket statistics from ALL horses (for overall stats)
+  const oddsBucketStats = buildOddsBucketStats(horsesWithoutStats);
+
+  // Second pass: add μ/σ to each horse based on their odds bucket
+  const horses: HorseEntry[] = horsesWithoutStats.map((horse) => {
+    const stats = getHorseStats(horse, oddsBucketStats);
+    return {
+      ...horse,
+      mu: stats.mu,
+      variance: stats.variance,
+      sigma: stats.sigma,
+      muSmooth: stats.muSmooth,
+      varianceSmooth: stats.varianceSmooth,
+      sigmaSmooth: stats.sigmaSmooth,
+    };
+  });
 
   // Parse Jockeys sheet
   const jockeysSheet = workbook.Sheets['Jockeys'];
@@ -115,6 +139,14 @@ export async function loadExcelData() {
       shows: row.Show || 0,
       winPct: row['Win %'] || 0,
       itmPct: row['ITM %'] || 0,
+      // Will be calculated per date
+      mu: 0,
+      variance: 0,
+      sigma: 0,
+      muSmooth: 0,
+      varianceSmooth: 0,
+      sigmaSmooth: 0,
+      horseIds: [],
     });
   });
 
@@ -140,6 +172,13 @@ export async function loadExcelData() {
       shows: row.Show || 0,
       winPct: row['Win %'] || 0,
       itmPct: row['ITM %'] || 0,
+      mu: 0,
+      variance: 0,
+      sigma: 0,
+      muSmooth: 0,
+      varianceSmooth: 0,
+      sigmaSmooth: 0,
+      horseIds: [],
     });
   });
 
@@ -165,6 +204,13 @@ export async function loadExcelData() {
       shows: row.Show || 0,
       winPct: row['Win %'] || 0,
       itmPct: row['ITM %'] || 0,
+      mu: 0,
+      variance: 0,
+      sigma: 0,
+      muSmooth: 0,
+      varianceSmooth: 0,
+      sigmaSmooth: 0,
+      horseIds: [],
     });
   });
 
@@ -200,6 +246,7 @@ export async function loadExcelData() {
       trainers: trainerStats,
       sires: sireStats,
     },
+    oddsBucketStats,
   };
 
   return cachedData;
@@ -208,8 +255,9 @@ export async function loadExcelData() {
 export async function getDataForDate(date: string) {
   const data = await loadExcelData();
 
-  // Filter horses for this date
+  // Filter horses for this date (only non-scratched for stats)
   const dayHorses = data.horses.filter((h) => h.date === date);
+  const validDayHorses = dayHorses.filter((h) => !h.isScratched);
 
   // Group by race
   const raceMap = new Map<number, HorseEntry[]>();
@@ -228,18 +276,47 @@ export async function getDataForDate(date: string) {
     }))
     .sort((a, b) => a.raceNumber - b.raceNumber);
 
-  // Get connections for this date with 90d AVPA
+  // Get connections for this date with aggregated μ/σ from horses
   const connections: Connection[] = [];
   const seenConnections = new Set<string>();
+
+  // Helper to calculate connection stats from horses
+  const calculateConnectionStats = (
+    connectionName: string,
+    role: 'jockey' | 'trainer' | 'sire'
+  ): { mu: number; variance: number; sigma: number; muSmooth: number; varianceSmooth: number; sigmaSmooth: number; horseIds: string[] } => {
+    const connHorses = validDayHorses.filter((h) => {
+      if (role === 'jockey') return h.jockey === connectionName;
+      if (role === 'trainer') return h.trainer === connectionName;
+      if (role === 'sire') return h.sire1 === connectionName || h.sire2 === connectionName;
+      return false;
+    });
+
+    // Sum μ and variance across horses (σ = sqrt(sum of variances))
+    const mu = connHorses.reduce((sum, h) => sum + h.mu, 0);
+    const variance = connHorses.reduce((sum, h) => sum + h.variance, 0);
+    const sigma = Math.sqrt(variance);
+
+    const muSmooth = connHorses.reduce((sum, h) => sum + h.muSmooth, 0);
+    const varianceSmooth = connHorses.reduce((sum, h) => sum + h.varianceSmooth, 0);
+    const sigmaSmooth = Math.sqrt(varianceSmooth);
+
+    const horseIds = connHorses.map((h) => `${h.date}-${h.race}-${h.horse}`);
+
+    return { mu, variance, sigma, muSmooth, varianceSmooth, sigmaSmooth, horseIds };
+  };
 
   // Add jockeys
   data.jockeys.forEach((conn, key) => {
     if (key.startsWith(date)) {
-      const stats = data.stats.jockeys.get(conn.name);
+      const stats90d = data.stats.jockeys.get(conn.name);
+      const connectionStats = calculateConnectionStats(conn.name, 'jockey');
+      
       if (!seenConnections.has(conn.id)) {
         connections.push({
           ...conn,
-          avpa90d: stats?.avpa90d || conn.trackAvpa || 0,
+          avpa90d: stats90d?.avpa90d || conn.trackAvpa || 0,
+          ...connectionStats,
         });
         seenConnections.add(conn.id);
       }
@@ -249,11 +326,14 @@ export async function getDataForDate(date: string) {
   // Add trainers
   data.trainers.forEach((conn, key) => {
     if (key.startsWith(date)) {
-      const stats = data.stats.trainers.get(conn.name);
+      const stats90d = data.stats.trainers.get(conn.name);
+      const connectionStats = calculateConnectionStats(conn.name, 'trainer');
+      
       if (!seenConnections.has(conn.id)) {
         connections.push({
           ...conn,
-          avpa90d: stats?.avpa90d || conn.trackAvpa || 0,
+          avpa90d: stats90d?.avpa90d || conn.trackAvpa || 0,
+          ...connectionStats,
         });
         seenConnections.add(conn.id);
       }
@@ -263,18 +343,21 @@ export async function getDataForDate(date: string) {
   // Add sires
   data.sires.forEach((conn, key) => {
     if (key.startsWith(date)) {
-      const stats = data.stats.sires.get(conn.name);
+      const stats90d = data.stats.sires.get(conn.name);
+      const connectionStats = calculateConnectionStats(conn.name, 'sire');
+      
       if (!seenConnections.has(conn.id)) {
         connections.push({
           ...conn,
-          avpa90d: stats?.avpa90d || conn.trackAvpa || 0,
+          avpa90d: stats90d?.avpa90d || conn.trackAvpa || 0,
+          ...connectionStats,
         });
         seenConnections.add(conn.id);
       }
     }
   });
 
-  return { races, connections, horses: dayHorses };
+  return { races, connections, horses: dayHorses, oddsBucketStats: data.oddsBucketStats };
 }
 
 export function calculateExpectedPoints(picks: Connection[]): number {
@@ -294,6 +377,8 @@ export function calculateActualPoints(
     let points = 0;
 
     horses.forEach((horse) => {
+      if (horse.isScratched) return;
+      
       if (conn.role === 'jockey' && horse.jockey === conn.name) {
         points += horse.totalPoints;
       } else if (conn.role === 'trainer' && horse.trainer === conn.name) {
@@ -309,3 +394,97 @@ export function calculateActualPoints(
   return results;
 }
 
+/**
+ * Calculate lineup stats with stacking adjustment
+ * When multiple connections share the same horse, we detect it and adjust variance
+ */
+export function calculateLineupStatsWithStacking(
+  picks: Connection[]
+): {
+  mu: number;
+  variance: number;
+  sigma: number;
+  muSmooth: number;
+  varianceSmooth: number;
+  sigmaSmooth: number;
+  uniqueHorses: number;
+  stackedHorses: number;
+  stackingAdjustment: number;
+} {
+  if (picks.length === 0) {
+    return {
+      mu: 0,
+      variance: 0,
+      sigma: 0,
+      muSmooth: 0,
+      varianceSmooth: 0,
+      sigmaSmooth: 0,
+      uniqueHorses: 0,
+      stackedHorses: 0,
+      stackingAdjustment: 0,
+    };
+  }
+
+  // Collect all horse IDs from all picks
+  const allHorseIds: string[] = [];
+  picks.forEach((pick) => {
+    allHorseIds.push(...pick.horseIds);
+  });
+
+  // Count occurrences of each horse
+  const horseCount = new Map<string, number>();
+  allHorseIds.forEach((id) => {
+    horseCount.set(id, (horseCount.get(id) || 0) + 1);
+  });
+
+  const uniqueHorses = horseCount.size;
+  const stackedHorses = Array.from(horseCount.values()).filter((count) => count > 1).length;
+
+  // Sum μ (mean adds linearly)
+  const mu = picks.reduce((sum, p) => sum + p.mu, 0);
+  const muSmooth = picks.reduce((sum, p) => sum + p.muSmooth, 0);
+
+  // For variance, we need to account for stacking
+  // When the same horse appears multiple times, variances are correlated
+  // Simple approach: count each horse's variance only once when stacked
+  
+  // Map horse to its first connection's stats
+  const horseVarianceMap = new Map<string, { variance: number; varianceSmooth: number }>();
+  
+  picks.forEach((pick) => {
+    pick.horseIds.forEach((horseId) => {
+      if (!horseVarianceMap.has(horseId)) {
+        // Estimate per-horse variance (divide connection variance by number of horses)
+        const perHorseVar = pick.horseIds.length > 0 ? pick.variance / pick.horseIds.length : 0;
+        const perHorseVarSmooth = pick.horseIds.length > 0 ? pick.varianceSmooth / pick.horseIds.length : 0;
+        horseVarianceMap.set(horseId, { variance: perHorseVar, varianceSmooth: perHorseVarSmooth });
+      }
+    });
+  });
+
+  // Sum unique horse variances
+  let adjustedVariance = 0;
+  let adjustedVarianceSmooth = 0;
+  horseVarianceMap.forEach((v) => {
+    adjustedVariance += v.variance;
+    adjustedVarianceSmooth += v.varianceSmooth;
+  });
+
+  // Calculate how much variance was "saved" by stacking adjustment
+  const naiveVariance = picks.reduce((sum, p) => sum + p.variance, 0);
+  const naiveVarianceSmooth = picks.reduce((sum, p) => sum + p.varianceSmooth, 0);
+  
+  const stackingAdjustment = naiveVariance - adjustedVariance;
+
+  return {
+    mu,
+    variance: adjustedVariance,
+    sigma: Math.sqrt(adjustedVariance),
+    muSmooth,
+    varianceSmooth: adjustedVarianceSmooth,
+    sigmaSmooth: Math.sqrt(adjustedVarianceSmooth),
+    uniqueHorses,
+    stackedHorses,
+    stackingAdjustment,
+  };
+}

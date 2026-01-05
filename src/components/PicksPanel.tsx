@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { useGame, MULTIPLIER_TIERS } from '@/contexts/GameContext';
-import { X, Zap, TrendingUp, Users, DollarSign, Wallet } from 'lucide-react';
+import { useGame } from '@/contexts/GameContext';
+import { TargetProgressBar } from './TargetProgressBar';
+import { X, Zap, Users, DollarSign, Wallet, TrendingUp, Target } from 'lucide-react';
 
 const roleColors = {
   jockey: { bg: 'bg-blue-500', text: 'text-blue-500' },
@@ -20,7 +21,7 @@ export function PicksPanel() {
   const {
     picks,
     lineupStats,
-    selectedMultiplier,
+    targets,
     stake,
     salaryMin,
     salaryMax,
@@ -29,7 +30,6 @@ export function PicksPanel() {
     isSalaryValid,
     canPlay,
     removePick,
-    setSelectedMultiplier,
     setStake,
     play,
     clearPicks,
@@ -69,8 +69,8 @@ export function PicksPanel() {
             <span className="font-bold text-text-primary">{lineupStats.avgOdds ? lineupStats.avgOdds.toFixed(1) : '—'}</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-text-muted">Exp. Pts</span>
-            <span className="font-bold text-accent">{lineupStats.expectedPoints ? lineupStats.expectedPoints.toFixed(0) : '—'}</span>
+            <span className="text-text-muted">μ</span>
+            <span className="font-bold text-accent">{lineupStats.muSmooth ? lineupStats.muSmooth.toFixed(0) : '—'}</span>
           </div>
         </div>
       </div>
@@ -128,7 +128,7 @@ export function PicksPanel() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-text-primary truncate">{pick.connection.name}</p>
                     <p className="text-[10px] text-text-muted">
-                      ${pick.connection.salary.toLocaleString()} • {pick.connection.apps} apps • {pick.connection.avpa90d.toFixed(1)} exp
+                      ${pick.connection.salary.toLocaleString()} • μ: {pick.connection.muSmooth.toFixed(1)} • σ: {pick.connection.sigmaSmooth.toFixed(1)}
                     </p>
                   </div>
                   <button
@@ -144,40 +144,25 @@ export function PicksPanel() {
         )}
       </div>
       
-      {/* Bottom Section: Multipliers, Stake, Play */}
+      {/* Bottom Section: Targets, Stake, Play */}
       <div className="flex-shrink-0 border-t border-border bg-surface">
-        {/* Multipliers */}
-        <div className="px-3 py-2 border-b border-border">
-          <p className="text-xs text-text-muted mb-2">Select Multiplier</p>
-          <div className="grid grid-cols-4 gap-1.5">
-            {MULTIPLIER_TIERS.map((tier) => {
-              const isSelected = selectedMultiplier?.multiplier === tier.multiplier;
-              const isDisabled = !isAboveMin;
-              return (
-                <button
-                  key={tier.label}
-                  onClick={() => !isDisabled && setSelectedMultiplier(isSelected ? null : tier)}
-                  disabled={isDisabled}
-                  className={`py-2 px-1 rounded-lg text-center transition-all ${
-                    isDisabled
-                      ? 'bg-surface-hover text-text-muted cursor-not-allowed opacity-50'
-                      : isSelected
-                      ? 'ring-2 ring-offset-1 ring-offset-background'
-                      : 'bg-surface-elevated hover:bg-surface-hover'
-                  }`}
-                  style={{
-                    backgroundColor: isSelected ? tier.color : undefined,
-                    borderColor: tier.color,
-                    color: isSelected ? 'white' : tier.color,
-                    ...(isSelected ? { boxShadow: `0 0 12px ${tier.color}40` } : {}),
-                  }}
-                >
-                  <div className="text-sm font-bold">{tier.label}</div>
-                  <div className="text-[10px] opacity-80">{tier.threshold}%</div>
-                </button>
-              );
-            })}
+        {/* Dynamic Targets Progress Bar */}
+        <div className="px-3 py-3 border-b border-border">
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="w-4 h-4 text-accent" />
+            <span className="text-xs font-semibold text-text-primary">Target Thresholds</span>
+            {lineupStats.stackedHorses > 0 && (
+              <span className="text-[10px] text-amber-400 ml-auto">
+                ⚠️ {lineupStats.stackedHorses} stacked
+              </span>
+            )}
           </div>
+          <TargetProgressBar
+            targets={targets}
+            mu={lineupStats.muSmooth}
+            sigma={lineupStats.sigmaSmooth}
+            isActive={isAboveMin}
+          />
         </div>
         
         {/* Stake Input */}
@@ -212,14 +197,17 @@ export function PicksPanel() {
           </div>
         </div>
         
-        {/* Potential Payout & Play Button */}
+        {/* Play Button */}
         <div className="px-3 py-3">
-          {selectedMultiplier && (
-            <div className="flex items-center justify-between text-sm mb-2">
-              <span className="text-text-muted">Potential Payout</span>
-              <span className="font-bold text-success text-lg">
-                ${(stake * selectedMultiplier.multiplier).toLocaleString()}
-              </span>
+          {/* Quick payout preview */}
+          {isAboveMin && targets.length > 0 && (
+            <div className="flex items-center justify-center gap-3 mb-2 text-[10px]">
+              {targets.map(t => (
+                <div key={t.label} className="flex items-center gap-1">
+                  <span style={{ color: t.color }} className="font-bold">{t.label}:</span>
+                  <span className="text-success">${t.payout}</span>
+                </div>
+              ))}
             </div>
           )}
           
@@ -235,10 +223,10 @@ export function PicksPanel() {
             <Zap className="w-4 h-4" />
             {!isAboveMin
               ? `Add $${(salaryMin - lineupStats.totalSalary).toLocaleString()} more`
-              : !selectedMultiplier
-              ? 'Select a Multiplier'
               : stake > bankroll
               ? 'Insufficient Balance'
+              : lineupStats.mu === 0
+              ? 'Select more picks'
               : 'Play'}
           </button>
           

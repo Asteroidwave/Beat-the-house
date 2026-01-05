@@ -3,7 +3,8 @@
 import React from 'react';
 import { useGame } from '@/contexts/GameContext';
 import { calculateActualPoints } from '@/lib/parseExcel';
-import { Trophy, XCircle, RotateCcw, TrendingUp, Target, DollarSign, Wallet, History, CheckCircle, MinusCircle } from 'lucide-react';
+import { TargetProgressBar } from './TargetProgressBar';
+import { Trophy, XCircle, RotateCcw, TrendingUp, Target, DollarSign, Wallet, History, CheckCircle, MinusCircle, Zap } from 'lucide-react';
 
 const roleColors = {
   jockey: { bg: 'bg-blue-500', text: 'text-blue-500' },
@@ -24,8 +25,6 @@ export function ResultsView() {
 
   const pickedConnections = gameResult.picks.map((p) => p.connection);
   const actualPointsMap = calculateActualPoints(pickedConnections, horses);
-  
-  const percentAchieved = (gameResult.actualPoints / gameResult.expectedPoints) * 100;
 
   return (
     <div className="min-h-screen bg-background p-4 lg:p-6">
@@ -47,27 +46,57 @@ export function ResultsView() {
             </h1>
           </div>
           
-          <div className="grid grid-cols-3 gap-4 text-center">
+          {/* Achieved Tier */}
+          {gameResult.achievedTier ? (
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <Zap className="w-5 h-5 text-yellow-400" />
+              <span className="text-lg font-bold" style={{ color: gameResult.achievedTier.color }}>
+                HIT {gameResult.achievedTier.label} TARGET!
+              </span>
+              <span className="text-lg font-bold text-success">
+                +${gameResult.payout.toLocaleString()}
+              </span>
+            </div>
+          ) : (
+            <div className="text-center text-text-muted mb-4">
+              Didn't reach any target threshold
+            </div>
+          )}
+          
+          {/* Target Progress Bar with Results */}
+          <div className="bg-surface/50 rounded-xl p-4 mb-4">
+            <TargetProgressBar
+              targets={gameResult.targets}
+              mu={gameResult.lineupStats.muSmooth}
+              sigma={gameResult.lineupStats.sigmaSmooth}
+              actualPoints={gameResult.actualPoints}
+              showResults={true}
+              isActive={true}
+            />
+          </div>
+          
+          <div className="grid grid-cols-4 gap-4 text-center">
             <div>
-              <p className="text-sm text-text-muted mb-1">Expected</p>
-              <p className="text-2xl font-bold text-text-primary">{gameResult.expectedPoints.toFixed(1)}</p>
-              <p className="text-xs text-text-muted">points</p>
+              <p className="text-xs text-text-muted mb-1">μ (Expected)</p>
+              <p className="text-xl font-bold text-text-primary">{gameResult.lineupStats.muSmooth.toFixed(1)}</p>
             </div>
             <div>
-              <p className="text-sm text-text-muted mb-1">Actual</p>
-              <p className={`text-2xl font-bold ${gameResult.isWin ? 'text-success' : 'text-error'}`}>
+              <p className="text-xs text-text-muted mb-1">σ (Volatility)</p>
+              <p className="text-xl font-bold text-text-secondary">{gameResult.lineupStats.sigmaSmooth.toFixed(1)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-text-muted mb-1">Actual</p>
+              <p className={`text-xl font-bold ${gameResult.isWin ? 'text-success' : 'text-error'}`}>
                 {gameResult.actualPoints.toFixed(1)}
               </p>
-              <p className="text-xs text-text-muted">{percentAchieved.toFixed(0)}% of target</p>
             </div>
             <div>
-              <p className="text-sm text-text-muted mb-1">
-                {gameResult.isWin ? 'Payout' : 'Lost'}
+              <p className="text-xs text-text-muted mb-1">
+                {gameResult.isWin ? 'Payout' : 'Staked'}
               </p>
-              <p className={`text-2xl font-bold ${gameResult.isWin ? 'text-success' : 'text-error'}`}>
+              <p className={`text-xl font-bold ${gameResult.isWin ? 'text-success' : 'text-error'}`}>
                 ${gameResult.isWin ? gameResult.payout.toLocaleString() : gameResult.stake.toLocaleString()}
               </p>
-              <p className="text-xs text-text-muted">{gameResult.selectedMultiplier.label} multiplier</p>
             </div>
           </div>
         </div>
@@ -125,7 +154,7 @@ export function ResultsView() {
           <div className="divide-y divide-border">
             {gameResult.picks.map((pick) => {
               const actual = actualPointsMap.get(pick.connection.id) || 0;
-              const expected = pick.connection.avpa90d * pick.connection.apps;
+              const expected = pick.connection.muSmooth;
               const beat = actual >= expected;
               const colors = roleColors[pick.connection.role];
               
@@ -136,14 +165,16 @@ export function ResultsView() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-text-primary truncate">{pick.connection.name}</p>
-                    <p className="text-xs text-text-muted">{pick.connection.apps} apps</p>
+                    <p className="text-xs text-text-muted">
+                      {pick.connection.apps} apps • μ: {pick.connection.muSmooth.toFixed(1)} • σ: {pick.connection.sigmaSmooth.toFixed(1)}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-text-muted">Expected:</span>
+                    <div className="flex items-center gap-2 justify-end">
+                      <span className="text-xs text-text-muted">μ:</span>
                       <span className="text-sm font-medium text-text-secondary">{expected.toFixed(1)}</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 justify-end">
                       <span className="text-xs text-text-muted">Actual:</span>
                       <span className={`text-sm font-bold ${beat ? 'text-success' : 'text-error'}`}>
                         {actual.toFixed(1)}
@@ -182,10 +213,10 @@ export function ResultsView() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-text-primary">
-                      {entry.picks.length} picks • {entry.multiplier.label}
+                      {entry.picks.length} picks • {entry.achievedTier?.label || 'No hit'}
                     </p>
                     <p className="text-xs text-text-muted">
-                      {entry.actualPoints.toFixed(0)} / {entry.targetPoints.toFixed(0)} pts
+                      {entry.actualPoints.toFixed(0)} pts (μ: {entry.lineupStats.muSmooth.toFixed(0)})
                     </p>
                   </div>
                   <div className="text-right">
