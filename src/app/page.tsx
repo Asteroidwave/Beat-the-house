@@ -5,9 +5,10 @@ import { StartersPanel } from '@/components/StartersPanel';
 import { PlayersPanel } from '@/components/PlayersPanel';
 import { PicksPanel } from '@/components/PicksPanel';
 import { ResultsView } from '@/components/ResultsView';
+import { Wallet } from 'lucide-react';
 
 function GameContent() {
-  const { gamePhase } = useGame();
+  const { gamePhase, bankroll } = useGame();
 
   if (gamePhase === 'results') {
     return <ResultsView />;
@@ -27,7 +28,15 @@ function GameContent() {
               <p className="text-xs text-muted">Salary Cap Fantasy</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
+            {/* Bankroll */}
+            <div className="flex items-center gap-2 px-3 py-2 bg-accent/10 rounded-lg">
+              <Wallet className="w-4 h-4 text-accent" />
+              <div>
+                <div className="text-[10px] text-muted uppercase tracking-wider">Bankroll</div>
+                <div className="font-bold text-accent">${bankroll.toLocaleString()}</div>
+              </div>
+            </div>
             <div className="text-right">
               <div className="text-xs text-muted uppercase tracking-wider">Track</div>
               <div className="font-semibold text-primary">Aqueduct</div>

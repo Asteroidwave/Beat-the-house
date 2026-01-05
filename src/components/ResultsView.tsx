@@ -4,7 +4,7 @@ import React from 'react';
 import { useGame } from '@/contexts/GameContext';
 import { calculateActualPoints } from '@/lib/parseExcel';
 import { TargetProgressBar } from './TargetProgressBar';
-import { Trophy, XCircle, RotateCcw, TrendingUp, Target, DollarSign, Wallet, History, CheckCircle, MinusCircle, Zap } from 'lucide-react';
+import { Trophy, XCircle, RotateCcw, TrendingUp, Wallet, History, CheckCircle, MinusCircle, Zap } from 'lucide-react';
 
 const roleColors = {
   jockey: { bg: 'bg-blue-500', text: 'text-blue-500' },
@@ -67,30 +67,29 @@ export function ResultsView() {
           <div className="bg-surface/50 rounded-xl p-4 mb-4">
             <TargetProgressBar
               targets={gameResult.targets}
-              mu={gameResult.lineupStats.muSmooth}
-              sigma={gameResult.lineupStats.sigmaSmooth}
               actualPoints={gameResult.actualPoints}
               showResults={true}
               isActive={true}
             />
           </div>
           
+          {/* Stats - Show μ and σ HERE */}
           <div className="grid grid-cols-4 gap-4 text-center">
-            <div>
+            <div className="bg-surface/30 rounded-lg p-3">
               <p className="text-xs text-text-muted mb-1">μ (Expected)</p>
               <p className="text-xl font-bold text-text-primary">{gameResult.lineupStats.muSmooth.toFixed(1)}</p>
             </div>
-            <div>
+            <div className="bg-surface/30 rounded-lg p-3">
               <p className="text-xs text-text-muted mb-1">σ (Volatility)</p>
               <p className="text-xl font-bold text-text-secondary">{gameResult.lineupStats.sigmaSmooth.toFixed(1)}</p>
             </div>
-            <div>
+            <div className="bg-surface/30 rounded-lg p-3">
               <p className="text-xs text-text-muted mb-1">Actual</p>
               <p className={`text-xl font-bold ${gameResult.isWin ? 'text-success' : 'text-error'}`}>
                 {gameResult.actualPoints.toFixed(1)}
               </p>
             </div>
-            <div>
+            <div className="bg-surface/30 rounded-lg p-3">
               <p className="text-xs text-text-muted mb-1">
                 {gameResult.isWin ? 'Payout' : 'Staked'}
               </p>
@@ -146,7 +145,7 @@ export function ResultsView() {
           </div>
         </div>
         
-        {/* Picks Breakdown */}
+        {/* Picks Breakdown - Show salary, apps, avg odds */}
         <div className="panel mb-6">
           <div className="px-4 py-3 border-b border-border">
             <h2 className="text-lg font-bold text-text-primary">Your Picks Performance</h2>
@@ -166,7 +165,7 @@ export function ResultsView() {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-text-primary truncate">{pick.connection.name}</p>
                     <p className="text-xs text-text-muted">
-                      {pick.connection.apps} apps • μ: {pick.connection.muSmooth.toFixed(1)} • σ: {pick.connection.sigmaSmooth.toFixed(1)}
+                      ${pick.connection.salary.toLocaleString()} • {pick.connection.apps} apps • {pick.connection.avgOdds.toFixed(1)} odds
                     </p>
                   </div>
                   <div className="text-right">

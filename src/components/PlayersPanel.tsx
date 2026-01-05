@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useGame } from '@/contexts/GameContext';
 import { ConnectionRole } from '@/types';
-import { Plus, Check } from 'lucide-react';
+import { Plus, Minus } from 'lucide-react';
 
 type FilterType = 'all' | ConnectionRole;
 
@@ -27,7 +27,7 @@ const roleLabels = {
 };
 
 export function PlayersPanel() {
-  const { connections, isLoading, addPick, isConnectionPicked, lineupStats, salaryMax } = useGame();
+  const { connections, isLoading, addPick, removePick, isConnectionPicked, lineupStats, salaryMax } = useGame();
   const [filter, setFilter] = useState<FilterType>('all');
   const [sortBy, setSortBy] = useState<'salary' | 'apps' | 'avgOdds' | 'name'>('salary');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -162,19 +162,19 @@ export function PlayersPanel() {
               {/* Avg Odds */}
               <div className="text-right text-muted">{conn.avgOdds.toFixed(2)}</div>
 
-              {/* Add Button */}
+              {/* Add/Remove Button */}
               <button
-                onClick={() => addPick(conn)}
-                disabled={isPicked || !canAdd}
+                onClick={() => isPicked ? removePick(conn.id) : addPick(conn)}
+                disabled={!isPicked && !canAdd}
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
                   isPicked
-                    ? 'bg-accent text-white'
+                    ? 'bg-red-500 hover:bg-red-600 text-white'
                     : canAdd
                       ? 'bg-green-500 hover:bg-green-600 text-white'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
-                {isPicked ? <Check size={16} /> : <Plus size={16} />}
+                {isPicked ? <Minus size={16} /> : <Plus size={16} />}
               </button>
             </div>
           );
@@ -183,4 +183,3 @@ export function PlayersPanel() {
     </div>
   );
 }
-

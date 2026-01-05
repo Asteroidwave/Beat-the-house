@@ -3,7 +3,7 @@
 import React from 'react';
 import { useGame } from '@/contexts/GameContext';
 import { TargetProgressBar } from './TargetProgressBar';
-import { X, Zap, Users, DollarSign, Wallet, TrendingUp, Target } from 'lucide-react';
+import { X, Zap, Users } from 'lucide-react';
 
 const roleColors = {
   jockey: { bg: 'bg-blue-500', text: 'text-blue-500' },
@@ -32,28 +32,28 @@ export function PicksPanel() {
     removePick,
     setStake,
     play,
-    clearPicks,
-    bankroll,
   } = useGame();
 
   const salaryProgress = Math.min((lineupStats.totalSalary / salaryMax) * 100, 100);
   const isAboveMin = lineupStats.totalSalary >= salaryMin;
-  const isAtMax = lineupStats.totalSalary >= salaryMax;
+  const isAtMax = lineupStats.totalSalary === salaryMax;
+  const isInRange = lineupStats.totalSalary >= salaryMin && lineupStats.totalSalary < salaryMax;
+
+  // Get salary bar color
+  const getSalaryBarColor = () => {
+    if (isAtMax) return 'bg-purple-500';
+    if (isInRange) return 'bg-success';
+    return 'bg-accent';
+  };
 
   return (
     <div className="panel flex flex-col h-full">
-      {/* Header with Bankroll */}
+      {/* Header */}
       <div className="flex-shrink-0 px-4 py-3 border-b border-border">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-text-primary">Your Picks</h2>
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-accent/10 rounded-lg">
-            <Wallet className="w-4 h-4 text-accent" />
-            <span className="text-sm font-semibold text-accent">${bankroll.toLocaleString()}</span>
-          </div>
-        </div>
+        <h2 className="text-lg font-bold text-text-primary">Your Picks</h2>
       </div>
       
-      {/* Compact Stats Row */}
+      {/* Compact Stats Row - No μ */}
       <div className="flex-shrink-0 px-3 py-2 border-b border-border bg-surface-elevated/50">
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-1">
@@ -68,10 +68,6 @@ export function PicksPanel() {
             <span className="text-text-muted">Avg Odds</span>
             <span className="font-bold text-text-primary">{lineupStats.avgOdds ? lineupStats.avgOdds.toFixed(1) : '—'}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="text-text-muted">μ</span>
-            <span className="font-bold text-accent">{lineupStats.muSmooth ? lineupStats.muSmooth.toFixed(0) : '—'}</span>
-          </div>
         </div>
       </div>
       
@@ -79,7 +75,7 @@ export function PicksPanel() {
       <div className="flex-shrink-0 px-3 py-2 border-b border-border">
         <div className="flex items-center justify-between text-xs mb-1.5">
           <span className="text-text-muted">Salary Cap</span>
-          <span className={`font-semibold ${isAboveMin ? 'text-success' : 'text-text-secondary'}`}>
+          <span className={`font-semibold ${isInRange || isAtMax ? 'text-success' : 'text-text-secondary'}`}>
             ${lineupStats.totalSalary.toLocaleString()} / ${salaryMax.toLocaleString()}
           </span>
         </div>
@@ -91,9 +87,7 @@ export function PicksPanel() {
           />
           {/* Progress */}
           <div
-            className={`h-full rounded-full transition-all duration-300 ${
-              isAtMax ? 'bg-error' : isAboveMin ? 'bg-success' : 'bg-accent'
-            }`}
+            className={`h-full rounded-full transition-all duration-300 ${getSalaryBarColor()}`}
             style={{ width: `${salaryProgress}%` }}
           />
         </div>
@@ -103,7 +97,7 @@ export function PicksPanel() {
         </div>
       </div>
       
-      {/* Scrollable Picks List */}
+      {/* Scrollable Picks List - Shows salary, apps, avg odds instead of μ/σ */}
       <div className="flex-1 overflow-y-auto min-h-0 px-3 py-2">
         {picks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center py-8">
@@ -128,7 +122,7 @@ export function PicksPanel() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-text-primary truncate">{pick.connection.name}</p>
                     <p className="text-[10px] text-text-muted">
-                      ${pick.connection.salary.toLocaleString()} • μ: {pick.connection.muSmooth.toFixed(1)} • σ: {pick.connection.sigmaSmooth.toFixed(1)}
+                      ${pick.connection.salary.toLocaleString()} • {pick.connection.apps} apps • {pick.connection.avgOdds.toFixed(1)} odds
                     </p>
                   </div>
                   <button
@@ -144,73 +138,51 @@ export function PicksPanel() {
         )}
       </div>
       
-      {/* Bottom Section: Targets, Stake, Play */}
+      {/* Bottom Section: Targets Progress Bar, Stake, Play */}
       <div className="flex-shrink-0 border-t border-border bg-surface">
-        {/* Dynamic Targets Progress Bar */}
+        {/* Target Progress Bar - No label, no μ/σ display */}
         <div className="px-3 py-3 border-b border-border">
-          <div className="flex items-center gap-2 mb-2">
-            <Target className="w-4 h-4 text-accent" />
-            <span className="text-xs font-semibold text-text-primary">Target Thresholds</span>
-            {lineupStats.stackedHorses > 0 && (
-              <span className="text-[10px] text-amber-400 ml-auto">
-                ⚠️ {lineupStats.stackedHorses} stacked
-              </span>
-            )}
-          </div>
           <TargetProgressBar
             targets={targets}
-            mu={lineupStats.muSmooth}
-            sigma={lineupStats.sigmaSmooth}
             isActive={isAboveMin}
           />
         </div>
         
-        {/* Stake Input */}
-        <div className="px-3 py-2 border-b border-border">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-text-muted">Your Stake</span>
-            <div className="flex items-center gap-1">
-              <DollarSign className="w-3 h-3 text-accent" />
+        {/* Stake Input - Box instead of slider */}
+        <div className="px-3 py-3 border-b border-border">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-text-muted whitespace-nowrap">Stake:</label>
+            <div className="flex-1 relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">$</span>
               <input
                 type="number"
                 value={stake}
-                onChange={(e) => setStake(Math.min(Math.max(Number(e.target.value), stakeMin), Math.min(stakeMax, bankroll)))}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (val >= 0) {
+                    setStake(Math.min(val, Math.min(stakeMax, lineupStats.totalSalary >= salaryMin ? 9999 : stakeMax)));
+                  }
+                }}
+                onBlur={(e) => {
+                  const val = Number(e.target.value);
+                  setStake(Math.max(stakeMin, Math.min(val, Math.min(stakeMax, lineupStats.totalSalary >= salaryMin ? 9999 : stakeMax))));
+                }}
                 min={stakeMin}
-                max={Math.min(stakeMax, bankroll)}
+                max={stakeMax}
                 disabled={!isAboveMin}
-                className="w-16 text-right text-sm font-bold text-text-primary bg-transparent border-none focus:outline-none disabled:text-text-muted"
+                placeholder="Enter amount"
+                className="w-full pl-7 pr-3 py-2 text-sm font-medium text-text-primary bg-surface-elevated border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
           </div>
-          <input
-            type="range"
-            value={stake}
-            onChange={(e) => setStake(Number(e.target.value))}
-            min={stakeMin}
-            max={Math.min(stakeMax, bankroll)}
-            disabled={!isAboveMin}
-            className="w-full h-1.5 bg-surface-hover rounded-full appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed accent-accent"
-          />
           <div className="flex justify-between text-[10px] text-text-muted mt-1">
-            <span>${stakeMin}</span>
-            <span>${Math.min(stakeMax, bankroll)}</span>
+            <span>Min: ${stakeMin}</span>
+            <span>Max: ${stakeMax}</span>
           </div>
         </div>
         
-        {/* Play Button */}
+        {/* Play Button - No Clear All Picks */}
         <div className="px-3 py-3">
-          {/* Quick payout preview */}
-          {isAboveMin && targets.length > 0 && (
-            <div className="flex items-center justify-center gap-3 mb-2 text-[10px]">
-              {targets.map(t => (
-                <div key={t.label} className="flex items-center gap-1">
-                  <span style={{ color: t.color }} className="font-bold">{t.label}:</span>
-                  <span className="text-success">${t.payout}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          
           <button
             onClick={play}
             disabled={!canPlay}
@@ -223,21 +195,10 @@ export function PicksPanel() {
             <Zap className="w-4 h-4" />
             {!isAboveMin
               ? `Add $${(salaryMin - lineupStats.totalSalary).toLocaleString()} more`
-              : stake > bankroll
-              ? 'Insufficient Balance'
-              : lineupStats.mu === 0
-              ? 'Select more picks'
+              : stake > stakeMax
+              ? `Max stake is $${stakeMax}`
               : 'Play'}
           </button>
-          
-          {picks.length > 0 && (
-            <button
-              onClick={clearPicks}
-              className="w-full mt-2 py-2 text-xs text-text-muted hover:text-error transition-colors"
-            >
-              Clear All Picks
-            </button>
-          )}
         </div>
       </div>
     </div>
