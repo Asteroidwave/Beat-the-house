@@ -32,6 +32,15 @@ export const AE_BUCKETS: OddsBucket[] = [
   { label: 'AE 13+', minOdds: 13.00, maxOdds: 999.00, salary: 100, decimalOdds: '>= 13.00', probabilityRange: '7.14% - 0.00%' },
 ];
 
+// Global prior for Bayesian shrinkage - will be computed from all data
+interface GlobalPrior {
+  mu: number;
+  variance: number;
+  n: number;
+}
+
+let globalPrior: GlobalPrior | null = null;
+
 /**
  * Find which odds bucket a horse belongs to based on decimal odds
  */
@@ -65,11 +74,48 @@ function smooth3BucketWMA(values: number[]): number[] {
 }
 
 /**
- * Build odds bucket statistics from horse data
+ * Apply Bayesian shrinkage to estimates with small sample sizes
+ * Shrinks toward global mean when sample size is small
+ * 
+ * Formula: shrunk_mu = (n * sample_mu + k * prior_mu) / (n + k)
+ * where k is the shrinkage strength (higher = more shrinkage to prior)
+ */
+function applyBayesianShrinkage(
+  sampleMu: number,
+  sampleVariance: number,
+  sampleN: number,
+  prior: GlobalPrior,
+  shrinkageStrength: number = 10
+): { mu: number; variance: number } {
+  if (sampleN === 0) {
+    return { mu: prior.mu, variance: prior.variance };
+  }
+  
+  // Shrink mean toward global mean
+  const shrunkMu = (sampleN * sampleMu + shrinkageStrength * prior.mu) / (sampleN + shrinkageStrength);
+  
+  // For variance, use similar shrinkage with a floor to prevent 0 variance
+  const minVariance = prior.variance * 0.1; // At least 10% of prior variance
+  const shrunkVariance = Math.max(
+    (sampleN * sampleVariance + shrinkageStrength * prior.variance) / (sampleN + shrinkageStrength),
+    minVariance
+  );
+  
+  return { mu: shrunkMu, variance: shrunkVariance };
+}
+
+/**
+ * Build odds bucket statistics from horse data with Bayesian shrinkage
  */
 export function buildOddsBucketStats(horses: Omit<HorseEntry, 'mu' | 'variance' | 'sigma' | 'muSmooth' | 'varianceSmooth' | 'sigmaSmooth'>[]): Map<string, OddsBucketStats> {
   // Filter out scratched horses
   const validHorses = horses.filter(h => !h.isScratched && h.finish > 0);
+  
+  // Calculate global prior from all valid horses (for Bayesian shrinkage)
+  const allPoints = validHorses.map(h => h.totalPoints || 0);
+  const globalMu = allPoints.length > 0 ? allPoints.reduce((a, b) => a + b, 0) / allPoints.length : 0;
+  const globalVariance = calculateSampleVariance(allPoints, globalMu);
+  globalPrior = { mu: globalMu, variance: globalVariance, n: allPoints.length };
   
   // Group horses by bucket
   const bucketHorses = new Map<string, typeof validHorses>();
@@ -91,6 +137,8 @@ export function buildOddsBucketStats(horses: Omit<HorseEntry, 'mu' | 'variance' 
     const count = bucketList.length;
     
     if (count === 0) {
+      // Apply full prior for empty buckets
+      const shrunk = applyBayesianShrinkage(0, 0, 0, globalPrior!);
       return {
         bucket,
         horsesCount: 0,
@@ -100,17 +148,17 @@ export function buildOddsBucketStats(horses: Omit<HorseEntry, 'mu' | 'variance' 
         dnf: 0, itmPct: 0,
         totalPoints: 0,
         totalPointsWithScrAdj: 0,
-        avgPoints: 0,
-        avgPointsWithScrAdj: 0,
+        avgPoints: shrunk.mu,
+        avgPointsWithScrAdj: shrunk.mu,
         totalSalary: 0,
         totalSalaryWithScrAdj: 0,
         pointsPer1000: 0,
-        mu: 0,
-        variance: 0,
-        sigma: 0,
-        muSmooth: 0,
-        varianceSmooth: 0,
-        sigmaSmooth: 0,
+        mu: shrunk.mu,
+        variance: shrunk.variance,
+        sigma: Math.sqrt(shrunk.variance),
+        muSmooth: shrunk.mu,
+        varianceSmooth: shrunk.variance,
+        sigmaSmooth: Math.sqrt(shrunk.variance),
       };
     }
     
@@ -124,9 +172,11 @@ export function buildOddsBucketStats(horses: Omit<HorseEntry, 'mu' | 'variance' 
     const totalSalary = bucketList.reduce((sum, h) => sum + (h.salary || 0), 0);
     
     const pointsArray = bucketList.map(h => h.totalPoints || 0);
-    const mu = count > 0 ? totalPoints / count : 0;
-    const variance = calculateSampleVariance(pointsArray, mu);
-    const sigma = Math.sqrt(variance);
+    const rawMu = count > 0 ? totalPoints / count : 0;
+    const rawVariance = calculateSampleVariance(pointsArray, rawMu);
+    
+    // Apply Bayesian shrinkage for small samples
+    const shrunk = applyBayesianShrinkage(rawMu, rawVariance, count, globalPrior!);
     
     return {
       bucket,
@@ -140,18 +190,18 @@ export function buildOddsBucketStats(horses: Omit<HorseEntry, 'mu' | 'variance' 
       dnf,
       itmPct: count > 0 ? (itm / count) * 100 : 0,
       totalPoints,
-      totalPointsWithScrAdj: totalPoints, // Same for now
-      avgPoints: mu,
-      avgPointsWithScrAdj: mu,
+      totalPointsWithScrAdj: totalPoints,
+      avgPoints: rawMu,
+      avgPointsWithScrAdj: rawMu,
       totalSalary,
       totalSalaryWithScrAdj: totalSalary,
       pointsPer1000: totalSalary > 0 ? (totalPoints / totalSalary) * 1000 : 0,
-      mu,
-      variance,
-      sigma,
-      muSmooth: mu, // Will be updated after smoothing
-      varianceSmooth: variance,
-      sigmaSmooth: sigma,
+      mu: shrunk.mu,
+      variance: shrunk.variance,
+      sigma: Math.sqrt(shrunk.variance),
+      muSmooth: shrunk.mu, // Will be updated after smoothing
+      varianceSmooth: shrunk.variance,
+      sigmaSmooth: Math.sqrt(shrunk.variance),
     };
   });
   
@@ -189,6 +239,17 @@ export function getHorseStats(
   const stats = bucketStats.get(bucket.label);
   
   if (!stats) {
+    // Fall back to global prior
+    if (globalPrior) {
+      return {
+        mu: globalPrior.mu,
+        variance: globalPrior.variance,
+        sigma: Math.sqrt(globalPrior.variance),
+        muSmooth: globalPrior.mu,
+        varianceSmooth: globalPrior.variance,
+        sigmaSmooth: Math.sqrt(globalPrior.variance),
+      };
+    }
     return { mu: 0, variance: 0, sigma: 0, muSmooth: 0, varianceSmooth: 0, sigmaSmooth: 0 };
   }
   
@@ -275,4 +336,3 @@ export function determineAchievedTier(
   
   return null; // Didn't hit any target
 }
-

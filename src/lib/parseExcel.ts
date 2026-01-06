@@ -2,6 +2,9 @@ import * as XLSX from 'xlsx';
 import { Connection, HorseEntry, RaceInfo, OddsBucketStats } from '@/types';
 import { buildOddsBucketStats, getHorseStats } from './oddsStatistics';
 
+// Minimum scratches threshold - dates with more than this many scratches are excluded
+const MAX_SCRATCHES_PER_DAY = 10;
+
 interface RawHorseRow {
   Date: string;
   Race: number;
@@ -395,8 +398,24 @@ export function calculateActualPoints(
 }
 
 /**
- * Calculate lineup stats with stacking adjustment
- * When multiple connections share the same horse, we detect it and adjust variance
+ * Calculate lineup stats with improved stacking adjustment using correlation model
+ * 
+ * When multiple connections share the same horse, their outcomes are perfectly correlated (ρ=1).
+ * 
+ * For variance of sum of correlated variables:
+ * Var(X + Y) = Var(X) + Var(Y) + 2*Cov(X,Y)
+ * 
+ * When ρ=1 (perfect correlation):
+ * Cov(X,Y) = σ_X * σ_Y
+ * 
+ * For stacked horses (same underlying horse for multiple connections):
+ * - Each connection's variance from that horse is not independent
+ * - We model this as: the horse's variance contributes once, but affects all connections equally
+ * 
+ * Implementation:
+ * 1. Group connections by shared horses
+ * 2. For shared horses, use max(variances) instead of sum (conservative correlation estimate)
+ * 3. For independent parts, sum normally
  */
 export function calculateLineupStatsWithStacking(
   picks: Connection[]
@@ -425,56 +444,61 @@ export function calculateLineupStatsWithStacking(
     };
   }
 
-  // Collect all horse IDs from all picks
-  const allHorseIds: string[] = [];
-  picks.forEach((pick) => {
-    allHorseIds.push(...pick.horseIds);
-  });
-
-  // Count occurrences of each horse
-  const horseCount = new Map<string, number>();
-  allHorseIds.forEach((id) => {
-    horseCount.set(id, (horseCount.get(id) || 0) + 1);
-  });
-
-  const uniqueHorses = horseCount.size;
-  const stackedHorses = Array.from(horseCount.values()).filter((count) => count > 1).length;
-
-  // Sum μ (mean adds linearly)
-  const mu = picks.reduce((sum, p) => sum + p.mu, 0);
-  const muSmooth = picks.reduce((sum, p) => sum + p.muSmooth, 0);
-
-  // For variance, we need to account for stacking
-  // When the same horse appears multiple times, variances are correlated
-  // Simple approach: count each horse's variance only once when stacked
-  
-  // Map horse to its first connection's stats
-  const horseVarianceMap = new Map<string, { variance: number; varianceSmooth: number }>();
+  // Step 1: Build a map of horse → list of (pick, per-horse variance)
+  const horseToPicksMap = new Map<string, { pick: Connection; perHorseVar: number; perHorseVarSmooth: number }[]>();
   
   picks.forEach((pick) => {
+    const numHorses = pick.horseIds.length || 1;
     pick.horseIds.forEach((horseId) => {
-      if (!horseVarianceMap.has(horseId)) {
-        // Estimate per-horse variance (divide connection variance by number of horses)
-        const perHorseVar = pick.horseIds.length > 0 ? pick.variance / pick.horseIds.length : 0;
-        const perHorseVarSmooth = pick.horseIds.length > 0 ? pick.varianceSmooth / pick.horseIds.length : 0;
-        horseVarianceMap.set(horseId, { variance: perHorseVar, varianceSmooth: perHorseVarSmooth });
-      }
+      const existing = horseToPicksMap.get(horseId) || [];
+      existing.push({
+        pick,
+        perHorseVar: pick.variance / numHorses,
+        perHorseVarSmooth: pick.varianceSmooth / numHorses,
+      });
+      horseToPicksMap.set(horseId, existing);
     });
   });
 
-  // Sum unique horse variances
+  // Step 2: Calculate stacking stats
+  const uniqueHorses = horseToPicksMap.size;
+  let stackedHorses = 0;
   let adjustedVariance = 0;
   let adjustedVarianceSmooth = 0;
-  horseVarianceMap.forEach((v) => {
-    adjustedVariance += v.variance;
-    adjustedVarianceSmooth += v.varianceSmooth;
+  
+  horseToPicksMap.forEach((pickList, horseId) => {
+    if (pickList.length > 1) {
+      // This horse is stacked - connections are perfectly correlated
+      stackedHorses++;
+      
+      // For perfectly correlated random variables with the same source:
+      // Var(X1 + X2 + ... + Xn) = (σ1 + σ2 + ... + σn)^2
+      // Instead of Var(X1) + Var(X2) + ... + Var(Xn)
+      // 
+      // This means we sum the standard deviations, then square
+      const sumSigma = pickList.reduce((sum, p) => sum + Math.sqrt(p.perHorseVar), 0);
+      const sumSigmaSmooth = pickList.reduce((sum, p) => sum + Math.sqrt(p.perHorseVarSmooth), 0);
+      
+      adjustedVariance += sumSigma * sumSigma;
+      adjustedVarianceSmooth += sumSigmaSmooth * sumSigmaSmooth;
+    } else {
+      // Single connection for this horse - add variance normally
+      adjustedVariance += pickList[0].perHorseVar;
+      adjustedVarianceSmooth += pickList[0].perHorseVarSmooth;
+    }
   });
 
-  // Calculate how much variance was "saved" by stacking adjustment
+  // Step 3: Calculate μ (mean adds linearly regardless of correlation)
+  const mu = picks.reduce((sum, p) => sum + p.mu, 0);
+  const muSmooth = picks.reduce((sum, p) => sum + p.muSmooth, 0);
+
+  // Calculate naive variance (what we'd have without correlation adjustment)
   const naiveVariance = picks.reduce((sum, p) => sum + p.variance, 0);
-  const naiveVarianceSmooth = picks.reduce((sum, p) => sum + p.varianceSmooth, 0);
   
-  const stackingAdjustment = naiveVariance - adjustedVariance;
+  // Stacking adjustment shows the difference
+  // Note: with perfect correlation, adjusted variance is HIGHER than naive for stacks
+  // This is correct: when outcomes are correlated, variance is higher
+  const stackingAdjustment = adjustedVariance - naiveVariance;
 
   return {
     mu,
@@ -487,4 +511,48 @@ export function calculateLineupStatsWithStacking(
     stackedHorses,
     stackingAdjustment,
   };
+}
+
+/**
+ * Get all available race dates from the Excel file
+ * Filters out dates with no races or too many scratches
+ */
+export async function getAvailableDates(): Promise<{ date: string; raceCount: number; horseCount: number; scratchCount: number }[]> {
+  const data = await loadExcelData();
+  
+  // Group horses by date
+  const dateMap = new Map<string, { total: number; scratches: number; races: Set<number> }>();
+  
+  data.horses.forEach((horse) => {
+    const existing = dateMap.get(horse.date) || { total: 0, scratches: 0, races: new Set() };
+    existing.total++;
+    existing.races.add(horse.race);
+    if (horse.isScratched) {
+      existing.scratches++;
+    }
+    dateMap.set(horse.date, existing);
+  });
+  
+  // Filter and format dates
+  const availableDates: { date: string; raceCount: number; horseCount: number; scratchCount: number }[] = [];
+  
+  dateMap.forEach((stats, date) => {
+    // Exclude dates with too many scratches or no valid horses
+    const validHorses = stats.total - stats.scratches;
+    if (validHorses > 0 && stats.scratches <= MAX_SCRATCHES_PER_DAY) {
+      availableDates.push({
+        date,
+        raceCount: stats.races.size,
+        horseCount: stats.total,
+        scratchCount: stats.scratches,
+      });
+    }
+  });
+  
+  // Sort by date (newest first)
+  return availableDates.sort((a, b) => {
+    const dateA = new Date(a.date);
+    const dateB = new Date(b.date);
+    return dateB.getTime() - dateA.getTime();
+  });
 }

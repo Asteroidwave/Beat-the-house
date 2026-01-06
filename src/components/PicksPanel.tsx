@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGame } from '@/contexts/GameContext';
 import { TargetProgressBar } from './TargetProgressBar';
-import { X, Zap, Users } from 'lucide-react';
+import { X, Zap, Users, Trash2 } from 'lucide-react';
 
 const roleColors = {
   jockey: { bg: 'bg-blue-500', text: 'text-blue-500' },
@@ -27,23 +27,68 @@ export function PicksPanel() {
     salaryMax,
     stakeMin,
     stakeMax,
-    isSalaryValid,
     canPlay,
     removePick,
+    clearPicks,
     setStake,
     play,
   } = useGame();
+  
+  // Local state for stake input to allow empty field
+  const [stakeInput, setStakeInput] = useState(stake.toString());
+  
+  // Sync stakeInput when stake changes externally (e.g., game reset)
+  useEffect(() => {
+    setStakeInput(stake.toString());
+  }, [stake]);
 
   const salaryProgress = Math.min((lineupStats.totalSalary / salaryMax) * 100, 100);
   const isAboveMin = lineupStats.totalSalary >= salaryMin;
   const isAtMax = lineupStats.totalSalary === salaryMax;
   const isInRange = lineupStats.totalSalary >= salaryMin && lineupStats.totalSalary < salaryMax;
 
-  // Get salary bar color
+  // Get salary bar color - green when at $20k+, purple at exactly $50k
   const getSalaryBarColor = () => {
     if (isAtMax) return 'bg-purple-500';
-    if (isInRange) return 'bg-success';
+    if (isAboveMin) return 'bg-emerald-500';
     return 'bg-accent';
+  };
+  
+  // Get salary text color
+  const getSalaryTextColor = () => {
+    if (isAtMax) return 'text-purple-500';
+    if (isAboveMin) return 'text-emerald-500';
+    return 'text-text-secondary';
+  };
+  
+  // Handle stake input change
+  const handleStakeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Allow empty string or valid numbers
+    if (value === '' || /^\d*$/.test(value)) {
+      setStakeInput(value);
+      if (value !== '') {
+        const numValue = parseInt(value, 10);
+        if (!isNaN(numValue) && numValue >= 0) {
+          setStake(Math.min(numValue, stakeMax));
+        }
+      }
+    }
+  };
+  
+  // Handle stake input blur - validate and set minimum if needed
+  const handleStakeBlur = () => {
+    const numValue = parseInt(stakeInput, 10);
+    if (isNaN(numValue) || numValue < stakeMin) {
+      setStake(stakeMin);
+      setStakeInput(stakeMin.toString());
+    } else if (numValue > stakeMax) {
+      setStake(stakeMax);
+      setStakeInput(stakeMax.toString());
+    } else {
+      setStake(numValue);
+      setStakeInput(numValue.toString());
+    }
   };
 
   return (
@@ -75,7 +120,7 @@ export function PicksPanel() {
       <div className="flex-shrink-0 px-3 py-2 border-b border-border">
         <div className="flex items-center justify-between text-xs mb-1.5">
           <span className="text-text-muted">Salary Cap</span>
-          <span className={`font-semibold ${isInRange || isAtMax ? 'text-success' : 'text-text-secondary'}`}>
+          <span className={`font-semibold ${getSalaryTextColor()}`}>
             ${lineupStats.totalSalary.toLocaleString()} / ${salaryMax.toLocaleString()}
           </span>
         </div>
@@ -95,6 +140,17 @@ export function PicksPanel() {
           <span>${(salaryMin / 1000).toFixed(0)}k min</span>
           <span>${(salaryMax / 1000).toFixed(0)}k max</span>
         </div>
+        
+        {/* Clear All Button - below salary cap */}
+        {picks.length > 0 && (
+          <button
+            onClick={clearPicks}
+            className="mt-2 w-full py-1.5 text-xs text-error hover:text-white hover:bg-error/80 border border-error/30 rounded-lg transition-all flex items-center justify-center gap-1"
+          >
+            <Trash2 className="w-3 h-3" />
+            Clear All Picks
+          </button>
+        )}
       </div>
       
       {/* Scrollable Picks List - Shows salary, apps, avg odds instead of μ/σ */}
@@ -148,27 +204,19 @@ export function PicksPanel() {
           />
         </div>
         
-        {/* Stake Input - Box instead of slider */}
+        {/* Stake Input - Text field that allows clearing */}
         <div className="px-3 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <label className="text-xs text-text-muted whitespace-nowrap">Stake:</label>
             <div className="flex-1 relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">$</span>
               <input
-                type="number"
-                value={stake}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  if (val >= 0) {
-                    setStake(Math.min(val, Math.min(stakeMax, lineupStats.totalSalary >= salaryMin ? 9999 : stakeMax)));
-                  }
-                }}
-                onBlur={(e) => {
-                  const val = Number(e.target.value);
-                  setStake(Math.max(stakeMin, Math.min(val, Math.min(stakeMax, lineupStats.totalSalary >= salaryMin ? 9999 : stakeMax))));
-                }}
-                min={stakeMin}
-                max={stakeMax}
+                type="text"
+                inputMode="numeric"
+                value={stakeInput}
+                onChange={handleStakeChange}
+                onBlur={handleStakeBlur}
+                onFocus={(e) => e.target.select()}
                 disabled={!isAboveMin}
                 placeholder="Enter amount"
                 className="w-full pl-7 pr-3 py-2 text-sm font-medium text-text-primary bg-surface-elevated border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"

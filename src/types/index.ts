@@ -167,3 +167,25 @@ export interface GameHistoryEntry {
   isWin: boolean;
   balanceAfter: number;
 }
+
+// Available date info
+export interface AvailableDate {
+  date: string;
+  raceCount: number;
+  horseCount: number;
+  scratchCount: number;
+}
+
+// Filter state for cross-panel filtering
+export interface FilterState {
+  // Player filter: when a player is clicked in Players panel
+  selectedPlayers: Connection[];
+  // Horse filter: when a horse is clicked in Starters panel  
+  selectedHorses: { raceNumber: number; horseName: string; horseId: string }[];
+}
+
+// Connection highlight colors for multi-select
+export interface ConnectionHighlight {
+  connectionId: string;
+  color: string;
+}

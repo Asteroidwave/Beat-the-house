@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { 
   Connection, 
   Pick, 
@@ -12,12 +12,16 @@ import {
   GameHistoryEntry,
   TargetThreshold,
   OddsBucketStats,
+  AvailableDate,
+  FilterState,
+  ConnectionHighlight,
 } from '@/types';
 import { 
   getDataForDate, 
   calculateExpectedPoints, 
   calculateActualPoints,
   calculateLineupStatsWithStacking,
+  getAvailableDates,
 } from '@/lib/parseExcel';
 import { calculateTargets, determineAchievedTier } from '@/lib/oddsStatistics';
 
@@ -26,6 +30,15 @@ const SALARY_MAX = 50000;
 const STAKE_MIN = 5;
 const STAKE_MAX = 1000;
 const INITIAL_BANKROLL = 10000;
+
+// Colors for multi-select player filtering
+const HIGHLIGHT_COLORS = [
+  { bg: 'bg-blue-500', light: 'bg-blue-500/20', border: 'border-blue-500', text: 'text-blue-500' },
+  { bg: 'bg-purple-500', light: 'bg-purple-500/20', border: 'border-purple-500', text: 'text-purple-500' },
+  { bg: 'bg-pink-500', light: 'bg-pink-500/20', border: 'border-pink-500', text: 'text-pink-500' },
+  { bg: 'bg-cyan-500', light: 'bg-cyan-500/20', border: 'border-cyan-500', text: 'text-cyan-500' },
+  { bg: 'bg-orange-500', light: 'bg-orange-500/20', border: 'border-orange-500', text: 'text-orange-500' },
+];
 
 // Multiplier tiers with z-values for dynamic targets
 export const MULTIPLIER_TIERS: MultiplierTier[] = [
@@ -42,7 +55,15 @@ interface GameContextType {
   horses: HorseEntry[];
   oddsBucketStats: Map<string, OddsBucketStats>;
   isLoading: boolean;
+  
+  // Date selection
   selectedDate: string;
+  setSelectedDate: (date: string) => void;
+  availableDates: AvailableDate[];
+  
+  // Theme
+  theme: 'dark' | 'light';
+  toggleTheme: () => void;
   
   // Picks
   picks: Pick[];
@@ -76,6 +97,15 @@ interface GameContextType {
   totalWonAmount: number;
   totalLostAmount: number;
   
+  // Filtering
+  filterState: FilterState;
+  togglePlayerFilter: (connection: Connection) => void;
+  toggleHorseFilter: (raceNumber: number, horseName: string, horseId: string) => void;
+  clearPlayerFilters: () => void;
+  clearHorseFilters: () => void;
+  clearAllFilters: () => void;
+  getPlayerHighlightColor: (connectionId: string) => typeof HIGHLIGHT_COLORS[0] | null;
+  
   // Game flow
   canPlay: boolean;
   play: () => void;
@@ -92,12 +122,24 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [horses, setHorses] = useState<HorseEntry[]>([]);
   const [oddsBucketStats, setOddsBucketStats] = useState<Map<string, OddsBucketStats>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
-  const selectedDate = '2025-12-12'; // Dec 12
+  
+  // Date selection
+  const [selectedDate, setSelectedDateState] = useState('2025-12-12');
+  const [availableDates, setAvailableDates] = useState<AvailableDate[]>([]);
+  
+  // Theme
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   
   const [picks, setPicks] = useState<Pick[]>([]);
   const [stake, setStake] = useState(STAKE_MIN);
   const [gamePhase, setGamePhase] = useState<'picking' | 'results'>('picking');
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
+  
+  // Filtering
+  const [filterState, setFilterState] = useState<FilterState>({
+    selectedPlayers: [],
+    selectedHorses: [],
+  });
   
   // Bankroll & History - persist to localStorage
   const [bankroll, setBankroll] = useState(INITIAL_BANKROLL);
@@ -108,8 +150,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       const savedBankroll = localStorage.getItem('bth_bankroll');
       const savedHistory = localStorage.getItem('bth_history');
+      const savedTheme = localStorage.getItem('bth_theme') as 'dark' | 'light' | null;
       if (savedBankroll) setBankroll(Number(savedBankroll));
       if (savedHistory) setGameHistory(JSON.parse(savedHistory));
+      if (savedTheme) setTheme(savedTheme);
     }
   }, []);
 
@@ -118,12 +162,34 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       localStorage.setItem('bth_bankroll', bankroll.toString());
       localStorage.setItem('bth_history', JSON.stringify(gameHistory));
+      localStorage.setItem('bth_theme', theme);
     }
-  }, [bankroll, gameHistory]);
+  }, [bankroll, gameHistory, theme]);
   
-  // Load data
+  // Apply theme to document
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+  }, [theme]);
+  
+  // Load available dates on mount
+  useEffect(() => {
+    const loadDates = async () => {
+      try {
+        const dates = await getAvailableDates();
+        setAvailableDates(dates);
+      } catch (error) {
+        console.error('Failed to load available dates:', error);
+      }
+    };
+    loadDates();
+  }, []);
+  
+  // Load data for selected date
   useEffect(() => {
     const loadData = async () => {
+      setIsLoading(true);
       try {
         const data = await getDataForDate(selectedDate);
         setRaces(data.races);
@@ -139,8 +205,20 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     loadData();
   }, [selectedDate]);
   
+  const setSelectedDate = useCallback((date: string) => {
+    setSelectedDateState(date);
+    // Clear picks when changing date
+    setPicks([]);
+    setStake(STAKE_MIN);
+    setFilterState({ selectedPlayers: [], selectedHorses: [] });
+  }, []);
+  
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  }, []);
+  
   // Calculate lineup stats with stacking adjustment
-  const lineupStats: LineupStats = React.useMemo(() => {
+  const lineupStats: LineupStats = useMemo(() => {
     if (picks.length === 0) {
       return { 
         totalSalary: 0, 
@@ -177,7 +255,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, [picks]);
   
   // Calculate dynamic targets based on lineup μ and σ (using smoothed values)
-  const targets: TargetThreshold[] = React.useMemo(() => {
+  const targets: TargetThreshold[] = useMemo(() => {
     return calculateTargets(lineupStats.muSmooth, lineupStats.sigmaSmooth, stake);
   }, [lineupStats.muSmooth, lineupStats.sigmaSmooth, stake]);
   
@@ -212,6 +290,59 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const isConnectionPicked = useCallback((connectionId: string) => {
     return picks.some(p => p.connection.id === connectionId);
   }, [picks]);
+  
+  // Filtering functions
+  const togglePlayerFilter = useCallback((connection: Connection) => {
+    setFilterState(prev => {
+      const isSelected = prev.selectedPlayers.some(p => p.id === connection.id);
+      if (isSelected) {
+        return {
+          ...prev,
+          selectedPlayers: prev.selectedPlayers.filter(p => p.id !== connection.id),
+        };
+      } else {
+        return {
+          ...prev,
+          selectedPlayers: [...prev.selectedPlayers, connection],
+        };
+      }
+    });
+  }, []);
+  
+  const toggleHorseFilter = useCallback((raceNumber: number, horseName: string, horseId: string) => {
+    setFilterState(prev => {
+      const isSelected = prev.selectedHorses.some(h => h.horseId === horseId);
+      if (isSelected) {
+        return {
+          ...prev,
+          selectedHorses: prev.selectedHorses.filter(h => h.horseId !== horseId),
+        };
+      } else {
+        return {
+          ...prev,
+          selectedHorses: [...prev.selectedHorses, { raceNumber, horseName, horseId }],
+        };
+      }
+    });
+  }, []);
+  
+  const clearPlayerFilters = useCallback(() => {
+    setFilterState(prev => ({ ...prev, selectedPlayers: [] }));
+  }, []);
+  
+  const clearHorseFilters = useCallback(() => {
+    setFilterState(prev => ({ ...prev, selectedHorses: [] }));
+  }, []);
+  
+  const clearAllFilters = useCallback(() => {
+    setFilterState({ selectedPlayers: [], selectedHorses: [] });
+  }, []);
+  
+  const getPlayerHighlightColor = useCallback((connectionId: string) => {
+    const index = filterState.selectedPlayers.findIndex(p => p.id === connectionId);
+    if (index === -1) return null;
+    return HIGHLIGHT_COLORS[index % HIGHLIGHT_COLORS.length];
+  }, [filterState.selectedPlayers]);
   
   const play = useCallback(() => {
     if (!canPlay) return;
@@ -264,7 +395,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     clearPicks();
     setGameResult(null);
     setGamePhase('picking');
-  }, [clearPicks]);
+    clearAllFilters();
+  }, [clearPicks, clearAllFilters]);
   
   return (
     <GameContext.Provider
@@ -275,6 +407,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         oddsBucketStats,
         isLoading,
         selectedDate,
+        setSelectedDate,
+        availableDates,
+        theme,
+        toggleTheme,
         picks,
         addPick,
         removePick,
@@ -295,6 +431,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         totalLosses,
         totalWonAmount,
         totalLostAmount,
+        filterState,
+        togglePlayerFilter,
+        toggleHorseFilter,
+        clearPlayerFilters,
+        clearHorseFilters,
+        clearAllFilters,
+        getPlayerHighlightColor,
         canPlay,
         play,
         gamePhase,

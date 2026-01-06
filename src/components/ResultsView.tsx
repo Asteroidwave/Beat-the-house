@@ -18,8 +18,19 @@ const roleLabels = {
   sire: 'S',
 };
 
-export function ResultsView() {
+interface ResultsViewProps {
+  onGoHome?: () => void;
+}
+
+export function ResultsView({ onGoHome }: ResultsViewProps) {
   const { gameResult, horses, resetGame, bankroll, gameHistory, totalWins, totalLosses, totalWonAmount, totalLostAmount } = useGame();
+  
+  const handlePlayAgain = () => {
+    resetGame();
+    if (onGoHome) {
+      onGoHome();
+    }
+  };
 
   if (!gameResult) return null;
 
@@ -232,7 +243,7 @@ export function ResultsView() {
         
         {/* Play Again Button */}
         <button
-          onClick={resetGame}
+          onClick={handlePlayAgain}
           className="w-full py-4 rounded-xl bg-gradient-to-r from-accent to-purple-600 hover:opacity-90 text-white font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all"
         >
           <RotateCcw className="w-5 h-5" />
