@@ -218,16 +218,21 @@ export function PlayersPanel() {
                 {roleLabels[conn.role]}
               </button>
 
-              {/* Name */}
-              <div className="min-w-0">
-                <div className={`font-medium truncate ${isScratched ? 'line-through text-text-muted' : isPicked ? colors.text : 'text-primary'}`}>
+              {/* Name - Clickable to filter starters */}
+              <button
+                onClick={() => !isScratched && togglePlayerFilter(conn)}
+                disabled={isScratched}
+                className="min-w-0 text-left"
+                title={isScratched ? 'Scratched' : 'Click to filter starters panel by this player'}
+              >
+                <div className={`font-medium truncate ${isScratched ? 'line-through text-text-muted cursor-not-allowed' : isPicked ? colors.text : isFiltering ? 'text-accent underline' : 'text-primary hover:text-accent hover:underline'}`}>
                   {conn.name}
                   {isScratched && <span className="ml-1 text-xs text-error no-underline">(SCR)</span>}
                 </div>
                 <div className="text-xs text-muted">
                   {conn.wins}-{conn.places}-{conn.shows}
                 </div>
-              </div>
+              </button>
 
               {/* Salary */}
               <div className={`text-right font-medium ${isScratched ? 'line-through text-text-muted' : isPicked ? colors.text : 'text-primary'}`}>
