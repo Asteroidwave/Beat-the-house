@@ -40,12 +40,13 @@ const HIGHLIGHT_COLORS = [
   { bg: 'bg-orange-500', light: 'bg-orange-500/20', border: 'border-orange-500', text: 'text-orange-500' },
 ];
 
-// Multiplier tiers with z-values for dynamic targets
+// Multiplier tiers with z-values calibrated for 80% player return (20% house edge)
+// Based on backtest of 75,000+ connections across 8 tracks (AQU, GP, SA, PRX, etc.)
 export const MULTIPLIER_TIERS: MultiplierTier[] = [
-  { multiplier: 0.5, threshold: 80, label: '0.5x', color: '#94a3b8', zValue: -1.00 },
-  { multiplier: 2, threshold: 110, label: '2x', color: '#22c55e', zValue: 0.03 },
-  { multiplier: 3, threshold: 130, label: '3x', color: '#3b82f6', zValue: 0.53 },
-  { multiplier: 5, threshold: 160, label: '5x', color: '#a855f7', zValue: 1.18 },
+  { multiplier: 0.5, threshold: 80, label: '0.5x', color: '#94a3b8', zValue: 2.45 },  // 84.6% hit rate
+  { multiplier: 2, threshold: 110, label: '2x', color: '#22c55e', zValue: 5.45 },    // 17.6% hit rate
+  { multiplier: 3, threshold: 130, label: '3x', color: '#3b82f6', zValue: 6.35 },    // 9.3% hit rate
+  { multiplier: 5, threshold: 160, label: '5x', color: '#a855f7', zValue: 9.40 },    // 1.0% hit rate
 ];
 
 interface GameContextType {
