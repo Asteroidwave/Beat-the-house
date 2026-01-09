@@ -104,6 +104,7 @@ export interface RaceInfo {
 export interface Pick {
   connection: Connection;
   addedAt: number;
+  actualPoints?: number; // Populated after game result
 }
 
 // Lineup statistics with μ and σ

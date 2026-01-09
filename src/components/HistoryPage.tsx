@@ -119,28 +119,100 @@ function HistoryEntryCard({ entry, index }: HistoryEntryCardProps) {
             </div>
           </div>
           
-          {/* Picks List */}
+          {/* Picks List - Enhanced with columns */}
           <div className="border-t border-border">
-            <div className="px-4 py-2 bg-surface-elevated/30">
-              <span className="text-xs font-medium text-text-muted uppercase tracking-wider">Picks</span>
+            {/* Column Headers */}
+            <div className="px-4 py-2 bg-surface-elevated/30 grid grid-cols-12 gap-1 text-[10px] font-medium text-text-muted uppercase tracking-wider">
+              <div className="col-span-4">Connection</div>
+              <div className="col-span-1 text-center">Apps</div>
+              <div className="col-span-2 text-center">Odds</div>
+              <div className="col-span-2 text-center">Salary</div>
+              <div className="col-span-1 text-center">μ</div>
+              <div className="col-span-2 text-center">Actual</div>
             </div>
+            
             <div className="divide-y divide-border">
               {entry.picks.map((pick) => {
                 const colors = roleColors[pick.connection.role];
+                const expected = pick.connection.muSmooth || 0;
+                const actual = pick.actualPoints ?? 0;
+                const diff = actual - expected;
+                const performanceColor = diff > 0.5 ? 'text-success' : diff < -0.5 ? 'text-error' : 'text-accent';
+                const bgColor = diff > 0.5 ? 'bg-success/10' : diff < -0.5 ? 'bg-error/10' : '';
+                
                 return (
-                  <div key={pick.connection.id} className="px-4 py-2 flex items-center gap-2">
-                    <div className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold ${colors.bg} text-white`}>
-                      {roleLabels[pick.connection.role]}
+                  <div key={pick.connection.id} className={`px-4 py-2 grid grid-cols-12 gap-1 items-center ${bgColor}`}>
+                    {/* Connection Name */}
+                    <div className="col-span-4 flex items-center gap-2 min-w-0">
+                      <div className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-xs font-bold ${colors.bg} text-white`}>
+                        {roleLabels[pick.connection.role]}
+                      </div>
+                      <span className="text-sm font-medium text-text-primary truncate">
+                        {pick.connection.name}
+                      </span>
                     </div>
-                    <span className="flex-1 text-sm font-medium text-text-primary truncate">
-                      {pick.connection.name}
-                    </span>
-                    <span className="text-xs text-text-muted">
+                    
+                    {/* Apps */}
+                    <div className="col-span-1 text-center text-xs text-text-muted">
+                      {pick.connection.apps}
+                    </div>
+                    
+                    {/* Odds */}
+                    <div className="col-span-2 text-center text-xs text-text-muted">
+                      {pick.connection.avgOdds.toFixed(1)}
+                    </div>
+                    
+                    {/* Salary */}
+                    <div className="col-span-2 text-center text-xs text-text-secondary">
                       ${pick.connection.salary.toLocaleString()}
-                    </span>
+                    </div>
+                    
+                    {/* μ (Expected) */}
+                    <div className="col-span-1 text-center text-xs text-text-muted">
+                      {expected.toFixed(0)}
+                    </div>
+                    
+                    {/* Actual with diff bubble */}
+                    <div className="col-span-2 flex items-center justify-center gap-1">
+                      <span className={`text-sm font-bold ${performanceColor}`}>
+                        {actual.toFixed(0)}
+                      </span>
+                      <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${
+                        diff > 0.5 ? 'bg-success/20 text-success' : 
+                        diff < -0.5 ? 'bg-error/20 text-error' : 
+                        'bg-accent/20 text-accent'
+                      }`}>
+                        {diff >= 0 ? '+' : ''}{diff.toFixed(0)}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
+            </div>
+            
+            {/* Totals Row */}
+            <div className="px-4 py-2 bg-surface-elevated/50 grid grid-cols-12 gap-1 items-center border-t border-border">
+              <div className="col-span-4 text-sm font-bold text-text-primary">TOTAL</div>
+              <div className="col-span-1 text-center text-xs text-text-muted">
+                {entry.picks.reduce((sum, p) => sum + p.connection.apps, 0)}
+              </div>
+              <div className="col-span-2 text-center text-xs text-text-muted">—</div>
+              <div className="col-span-2 text-center text-xs font-medium text-text-secondary">
+                ${entry.picks.reduce((sum, p) => sum + p.connection.salary, 0).toLocaleString()}
+              </div>
+              <div className="col-span-1 text-center text-xs text-text-muted">
+                {entry.lineupStats.muSmooth.toFixed(0)}
+              </div>
+              <div className="col-span-2 flex items-center justify-center gap-1">
+                <span className={`text-sm font-bold ${entry.isWin ? 'text-success' : 'text-error'}`}>
+                  {entry.actualPoints.toFixed(0)}
+                </span>
+                <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${
+                  entry.actualPoints >= entry.lineupStats.muSmooth ? 'bg-success/20 text-success' : 'bg-error/20 text-error'
+                }`}>
+                  {entry.actualPoints >= entry.lineupStats.muSmooth ? '+' : ''}{(entry.actualPoints - entry.lineupStats.muSmooth).toFixed(0)}
+                </span>
+              </div>
             </div>
           </div>
         </div>

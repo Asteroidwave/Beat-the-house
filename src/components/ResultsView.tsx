@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { useGame } from '@/contexts/GameContext';
-import { calculateActualPoints } from '@/lib/parseExcel';
 import { TargetProgressBar } from './TargetProgressBar';
 import { Trophy, XCircle, RotateCcw, TrendingUp, Wallet, History, CheckCircle, MinusCircle, Zap } from 'lucide-react';
 
@@ -23,7 +22,7 @@ interface ResultsViewProps {
 }
 
 export function ResultsView({ onGoHome }: ResultsViewProps) {
-  const { gameResult, horses, resetGame, bankroll, gameHistory, totalWins, totalLosses, totalWonAmount, totalLostAmount } = useGame();
+  const { gameResult, resetGame, bankroll, gameHistory, totalWins, totalLosses, totalWonAmount, totalLostAmount } = useGame();
   
   const handlePlayAgain = () => {
     resetGame();
@@ -33,9 +32,6 @@ export function ResultsView({ onGoHome }: ResultsViewProps) {
   };
 
   if (!gameResult) return null;
-
-  const pickedConnections = gameResult.picks.map((p) => p.connection);
-  const actualPointsMap = calculateActualPoints(pickedConnections, horses);
 
   return (
     <div className="min-h-screen bg-background p-4 lg:p-6">
@@ -156,49 +152,104 @@ export function ResultsView({ onGoHome }: ResultsViewProps) {
           </div>
         </div>
         
-        {/* Picks Breakdown - Show salary, apps, avg odds */}
+        {/* Picks Breakdown - Enhanced with columns */}
         <div className="panel mb-6">
           <div className="px-4 py-3 border-b border-border">
             <h2 className="text-lg font-bold text-text-primary">Your Picks Performance</h2>
           </div>
+          
+          {/* Column Headers */}
+          <div className="px-4 py-2 bg-surface-elevated/30 grid grid-cols-12 gap-1 text-[10px] font-medium text-text-muted uppercase tracking-wider border-b border-border">
+            <div className="col-span-4">Connection</div>
+            <div className="col-span-1 text-center">Apps</div>
+            <div className="col-span-2 text-center">Odds</div>
+            <div className="col-span-2 text-center">Salary</div>
+            <div className="col-span-1 text-center">μ</div>
+            <div className="col-span-2 text-center">Actual</div>
+          </div>
+          
           <div className="divide-y divide-border">
             {gameResult.picks.map((pick) => {
-              const actual = actualPointsMap.get(pick.connection.id) || 0;
-              const expected = pick.connection.muSmooth;
-              const beat = actual >= expected;
+              const actual = pick.actualPoints ?? 0;
+              const expected = pick.connection.muSmooth || 0;
+              const diff = actual - expected;
+              const performanceColor = diff > 0.5 ? 'text-success' : diff < -0.5 ? 'text-error' : 'text-accent';
+              const bgColor = diff > 0.5 ? 'bg-success/10' : diff < -0.5 ? 'bg-error/10' : '';
               const colors = roleColors[pick.connection.role];
               
               return (
-                <div key={pick.connection.id} className="px-4 py-3 flex items-center gap-3">
-                  <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${colors.bg} text-white`}>
-                    {roleLabels[pick.connection.role]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-text-primary truncate">{pick.connection.name}</p>
-                    <p className="text-xs text-text-muted">
-                      ${pick.connection.salary.toLocaleString()} • {pick.connection.apps} apps • {pick.connection.avgOdds.toFixed(1)} odds
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="flex items-center gap-2 justify-end">
-                      <span className="text-xs text-text-muted">μ:</span>
-                      <span className="text-sm font-medium text-text-secondary">{expected.toFixed(1)}</span>
+                <div key={pick.connection.id} className={`px-4 py-3 grid grid-cols-12 gap-1 items-center ${bgColor}`}>
+                  {/* Connection Name */}
+                  <div className="col-span-4 flex items-center gap-2 min-w-0">
+                    <div className={`w-6 h-6 rounded flex-shrink-0 flex items-center justify-center text-xs font-bold ${colors.bg} text-white`}>
+                      {roleLabels[pick.connection.role]}
                     </div>
-                    <div className="flex items-center gap-2 justify-end">
-                      <span className="text-xs text-text-muted">Actual:</span>
-                      <span className={`text-sm font-bold ${beat ? 'text-success' : 'text-error'}`}>
-                        {actual.toFixed(1)}
-                      </span>
-                      {beat ? (
-                        <CheckCircle className="w-4 h-4 text-success" />
-                      ) : (
-                        <MinusCircle className="w-4 h-4 text-error" />
-                      )}
-                    </div>
+                    <span className="font-medium text-text-primary truncate">
+                      {pick.connection.name}
+                    </span>
+                  </div>
+                  
+                  {/* Apps */}
+                  <div className="col-span-1 text-center text-xs text-text-muted">
+                    {pick.connection.apps}
+                  </div>
+                  
+                  {/* Odds */}
+                  <div className="col-span-2 text-center text-xs text-text-muted">
+                    {pick.connection.avgOdds.toFixed(1)}
+                  </div>
+                  
+                  {/* Salary */}
+                  <div className="col-span-2 text-center text-xs text-text-secondary">
+                    ${pick.connection.salary.toLocaleString()}
+                  </div>
+                  
+                  {/* μ (Expected) */}
+                  <div className="col-span-1 text-center text-xs text-text-muted">
+                    {expected.toFixed(0)}
+                  </div>
+                  
+                  {/* Actual with diff bubble */}
+                  <div className="col-span-2 flex items-center justify-center gap-1">
+                    <span className={`text-sm font-bold ${performanceColor}`}>
+                      {actual.toFixed(0)}
+                    </span>
+                    <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${
+                      diff > 0.5 ? 'bg-success/20 text-success' : 
+                      diff < -0.5 ? 'bg-error/20 text-error' : 
+                      'bg-accent/20 text-accent'
+                    }`}>
+                      {diff >= 0 ? '+' : ''}{diff.toFixed(0)}
+                    </span>
                   </div>
                 </div>
               );
             })}
+          </div>
+          
+          {/* Totals Row */}
+          <div className="px-4 py-3 bg-surface-elevated/50 grid grid-cols-12 gap-1 items-center border-t border-border">
+            <div className="col-span-4 font-bold text-text-primary">TOTAL</div>
+            <div className="col-span-1 text-center text-xs text-text-muted">
+              {gameResult.picks.reduce((sum, p) => sum + p.connection.apps, 0)}
+            </div>
+            <div className="col-span-2 text-center text-xs text-text-muted">—</div>
+            <div className="col-span-2 text-center text-xs font-medium text-text-secondary">
+              ${gameResult.picks.reduce((sum, p) => sum + p.connection.salary, 0).toLocaleString()}
+            </div>
+            <div className="col-span-1 text-center text-xs text-text-muted">
+              {gameResult.lineupStats.muSmooth.toFixed(0)}
+            </div>
+            <div className="col-span-2 flex items-center justify-center gap-1">
+              <span className={`text-sm font-bold ${gameResult.isWin ? 'text-success' : 'text-error'}`}>
+                {gameResult.actualPoints.toFixed(0)}
+              </span>
+              <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${
+                gameResult.actualPoints >= gameResult.lineupStats.muSmooth ? 'bg-success/20 text-success' : 'bg-error/20 text-error'
+              }`}>
+                {gameResult.actualPoints >= gameResult.lineupStats.muSmooth ? '+' : ''}{(gameResult.actualPoints - gameResult.lineupStats.muSmooth).toFixed(0)}
+              </span>
+            </div>
           </div>
         </div>
         

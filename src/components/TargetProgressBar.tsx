@@ -28,17 +28,39 @@ export function TargetProgressBar({
     : -1;
 
   // Calculate actual points position for results
+  // The key insight: when you HIT a tier, the bar should extend PAST that tier's badge
   const getActualPosition = () => {
     if (!showResults || actualPoints === undefined || sortedTargets.length === 0) return 0;
     
-    const minTarget = sortedTargets[0]?.targetPoints || 0;
-    const maxTarget = sortedTargets[sortedTargets.length - 1]?.targetPoints || 100;
-    const rangeStart = Math.max(0, minTarget * 0.7);
-    const rangeEnd = maxTarget * 1.2;
-    const totalRange = rangeEnd - rangeStart;
+    // Find which tier was achieved
+    const achievedIdx = sortedTargets.filter(t => actualPoints >= t.targetPoints).length;
     
-    if (totalRange === 0) return 0;
-    return Math.max(0, Math.min(100, ((actualPoints - rangeStart) / totalRange) * 100));
+    if (achievedIdx === 0) {
+      // Didn't hit any tier - show progress toward first tier
+      const firstTarget = sortedTargets[0]?.targetPoints || 100;
+      const progress = (actualPoints / firstTarget) * tierPositions[0];
+      return Math.max(0, Math.min(tierPositions[0] - 2, progress)); // Stay below 0.5x badge
+    }
+    
+    // Hit at least one tier - fill should extend past the achieved tier's badge
+    const achievedTierPosition = tierPositions[achievedIdx - 1];
+    
+    if (achievedIdx >= sortedTargets.length) {
+      // Hit the highest tier - fill to end with some extra
+      return 100;
+    }
+    
+    // Calculate how far between achieved tier and next tier
+    const achievedTarget = sortedTargets[achievedIdx - 1]?.targetPoints || 0;
+    const nextTarget = sortedTargets[achievedIdx]?.targetPoints || achievedTarget * 1.5;
+    const nextPosition = tierPositions[achievedIdx];
+    
+    // Progress between achieved tier badge and next tier badge
+    const progressInRange = (actualPoints - achievedTarget) / (nextTarget - achievedTarget);
+    const positionInRange = achievedTierPosition + (progressInRange * (nextPosition - achievedTierPosition));
+    
+    // Ensure we're at least past the achieved tier badge (+ 3% buffer)
+    return Math.max(achievedTierPosition + 3, Math.min(nextPosition - 2, positionInRange));
   };
 
   return (

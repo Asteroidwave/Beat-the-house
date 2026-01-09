@@ -351,6 +351,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const actualPointsMap = calculateActualPoints(pickedConnections, horses);
     const actualPoints = Array.from(actualPointsMap.values()).reduce((sum, pts) => sum + pts, 0);
     
+    // Create picks with actual points
+    const picksWithActual: Pick[] = picks.map(p => ({
+      ...p,
+      actualPoints: actualPointsMap.get(p.connection.id) || 0,
+    }));
+    
     // Determine which tier was achieved
     const achievedTier = determineAchievedTier(actualPoints, targets);
     const isWin = achievedTier !== null;
@@ -360,11 +366,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const newBankroll = bankroll - stake + payout;
     setBankroll(newBankroll);
     
-    // Add to history
+    // Add to history with actual points per pick
     const historyEntry: GameHistoryEntry = {
       id: Date.now().toString(),
       timestamp: Date.now(),
-      picks: [...picks],
+      picks: picksWithActual,
       lineupStats: { ...lineupStats },
       actualPoints,
       targets: [...targets],
@@ -377,7 +383,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setGameHistory(prev => [historyEntry, ...prev]);
     
     const result: GameResult = {
-      picks: [...picks],
+      picks: picksWithActual,
       lineupStats: { ...lineupStats },
       actualPoints,
       targets: [...targets],

@@ -225,9 +225,9 @@ function GameContent() {
               <div className="order-3 overflow-y-auto lg:h-full h-auto">
                 <PicksPanel />
               </div>
-            </div>
+        </div>
           )}
-        </main>
+      </main>
       )}
     </div>
   );
