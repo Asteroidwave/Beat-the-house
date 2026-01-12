@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '@/contexts/GameContext';
 import { TargetProgressBar } from './TargetProgressBar';
-import { X, Zap, Users, Trash2 } from 'lucide-react';
+import { TargetSliders } from './TargetSliders';
+import { X, Zap, Users, Trash2, ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
 
 const roleColors = {
   jockey: { bg: 'bg-blue-500', text: 'text-blue-500' },
@@ -36,6 +37,9 @@ export function PicksPanel() {
   
   // Local state for stake input to allow empty field
   const [stakeInput, setStakeInput] = useState(stake.toString());
+  
+  // State for collapsible target sliders
+  const [showSliders, setShowSliders] = useState(false);
   
   // Sync stakeInput when stake changes externally (e.g., game reset)
   useEffect(() => {
@@ -202,7 +206,28 @@ export function PicksPanel() {
             targets={targets}
             isActive={isAboveMin}
           />
+          
+          {/* Customize Targets Button */}
+          <button
+            onClick={() => setShowSliders(!showSliders)}
+            className="mt-2 w-full py-1.5 text-xs text-text-muted hover:text-accent border border-border/50 hover:border-accent/50 rounded-lg transition-all flex items-center justify-center gap-1.5"
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            Customize Targets
+            {showSliders ? (
+              <ChevronUp className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5" />
+            )}
+          </button>
         </div>
+        
+        {/* Collapsible Target Sliders */}
+        {showSliders && (
+          <div className="px-3 py-3 border-b border-border bg-surface-elevated/30">
+            <TargetSliders />
+          </div>
+        )}
         
         {/* Stake Input - Text field that allows clearing */}
         <div className="px-3 py-3 border-b border-border">
