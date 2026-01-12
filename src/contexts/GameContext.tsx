@@ -81,6 +81,10 @@ interface GameContextType {
   
   // Dynamic targets based on lineup μ/σ
   targets: TargetThreshold[];
+  customMultipliers: number[];
+  setCustomMultipliers: (multipliers: number[]) => void;
+  enabledTargetIndices: Set<number>;
+  setEnabledTargetIndices: (indices: Set<number>) => void;
   
   // Salary
   salaryMin: number;
@@ -138,6 +142,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [stake, setStake] = useState(STAKE_MIN);
   const [gamePhase, setGamePhase] = useState<'picking' | 'results'>('picking');
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
+  
+  // Custom target multipliers (default from calibration)
+  const [customMultipliers, setCustomMultipliers] = useState<number[]>([0.5, 2, 3, 5]);
+  const [enabledTargetIndices, setEnabledTargetIndices] = useState<Set<number>>(new Set([0, 1, 2, 3]));
   
   // Filtering
   const [filterState, setFilterState] = useState<FilterState>({
@@ -258,10 +266,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     };
   }, [picks]);
   
-  // Calculate dynamic targets based on lineup μ and σ (using smoothed values)
+  // Calculate dynamic targets based on lineup μ and σ (using smoothed values and custom multipliers)
   const targets: TargetThreshold[] = useMemo(() => {
-    return calculateTargets(lineupStats.muSmooth, lineupStats.sigmaSmooth, stake);
-  }, [lineupStats.muSmooth, lineupStats.sigmaSmooth, stake]);
+    return calculateTargets(lineupStats.muSmooth, lineupStats.sigmaSmooth, stake, customMultipliers);
+  }, [lineupStats.muSmooth, lineupStats.sigmaSmooth, stake, customMultipliers]);
   
   const isSalaryValid = lineupStats.totalSalary >= SALARY_MIN && lineupStats.totalSalary <= SALARY_MAX;
   const canPlay = isSalaryValid && stake >= STAKE_MIN && stake <= STAKE_MAX && stake <= bankroll && lineupStats.mu > 0;
@@ -428,6 +436,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         isConnectionPicked,
         lineupStats,
         targets,
+        customMultipliers,
+        setCustomMultipliers,
+        enabledTargetIndices,
+        setEnabledTargetIndices,
         salaryMin: SALARY_MIN,
         salaryMax: SALARY_MAX,
         isSalaryValid,

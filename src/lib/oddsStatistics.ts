@@ -264,58 +264,76 @@ export function getHorseStats(
 }
 
 /**
- * Z-values for each multiplier tier
- * These determine how hard each target is to hit
+ * Calibrated z-values for standard multipliers (from 50k+ lineup simulations)
+ * These are calibrated for 80% total player return (20% house edge)
  */
-export const Z_VALUES = {
-  '0.5x': -1.00,   // Easy target (below mean)
-  '2x': 0.03,      // Just above mean
-  '3x': 0.53,      // Half sigma above mean
-  '5x': 1.18,      // Just over 1 sigma above mean
+export const CALIBRATED_Z_VALUES: Record<string, number> = {
+  '0.5': 3.15,   // 75.7% hit rate
+  '1': 4.00,    // ~50% hit rate
+  '1.5': 4.70,  // ~35% hit rate
+  '2': 5.35,    // 20.1% hit rate
+  '2.5': 5.70,  // ~16% hit rate
+  '3': 6.00,    // 11.9% hit rate
+  '4': 6.80,    // ~7% hit rate
+  '5': 7.50,    // ~4% hit rate
+  '7': 8.50,    // ~2% hit rate
+  '10': 10.00,  // ~0.5% hit rate
+  '15': 11.90,  // ~0.1% hit rate
 };
 
 /**
- * Calculate target points for a given μ and σ
+ * Get z-value for any multiplier via interpolation
+ */
+export function getZFromMultiplier(multiplier: number): number {
+  const calibration = Object.entries(CALIBRATED_Z_VALUES)
+    .map(([mult, z]) => ({ mult: parseFloat(mult), z }))
+    .sort((a, b) => a.mult - b.mult);
+  
+  // Linear interpolation between calibration points
+  for (let i = 0; i < calibration.length - 1; i++) {
+    if (multiplier >= calibration[i].mult && multiplier <= calibration[i + 1].mult) {
+      const ratio = (multiplier - calibration[i].mult) / (calibration[i + 1].mult - calibration[i].mult);
+      return calibration[i].z + ratio * (calibration[i + 1].z - calibration[i].z);
+    }
+  }
+  
+  // Extrapolate for out-of-range values
+  if (multiplier < calibration[0].mult) return calibration[0].z;
+  return calibration[calibration.length - 1].z;
+}
+
+/**
+ * Get color for a multiplier value
+ */
+export function getMultiplierColor(mult: number): string {
+  if (mult <= 0.5) return '#94a3b8'; // slate
+  if (mult <= 1.5) return '#22c55e'; // green
+  if (mult <= 3) return '#3b82f6';   // blue
+  if (mult <= 5) return '#a855f7';   // purple
+  if (mult <= 10) return '#f59e0b';  // amber
+  return '#ef4444';                  // red
+}
+
+/**
+ * Calculate target points for given multipliers, μ and σ
  */
 export function calculateTargets(
   mu: number,
   sigma: number,
-  stake: number
+  stake: number,
+  multipliers: number[] = [0.5, 2, 3, 5]
 ): { multiplier: number; label: string; zValue: number; targetPoints: number; payout: number; color: string }[] {
-  return [
-    {
-      multiplier: 0.5,
-      label: '0.5x',
-      color: '#94a3b8',
-      zValue: Z_VALUES['0.5x'],
-      targetPoints: mu + Z_VALUES['0.5x'] * sigma,
-      payout: stake * 0.5,
-    },
-    {
-      multiplier: 2,
-      label: '2x',
-      color: '#22c55e',
-      zValue: Z_VALUES['2x'],
-      targetPoints: mu + Z_VALUES['2x'] * sigma,
-      payout: stake * 2,
-    },
-    {
-      multiplier: 3,
-      label: '3x',
-      color: '#3b82f6',
-      zValue: Z_VALUES['3x'],
-      targetPoints: mu + Z_VALUES['3x'] * sigma,
-      payout: stake * 3,
-    },
-    {
-      multiplier: 5,
-      label: '5x',
-      color: '#a855f7',
-      zValue: Z_VALUES['5x'],
-      targetPoints: mu + Z_VALUES['5x'] * sigma,
-      payout: stake * 5,
-    },
-  ];
+  return multipliers.map(mult => {
+    const zValue = getZFromMultiplier(mult);
+    return {
+      multiplier: mult,
+      label: `${mult}x`,
+      color: getMultiplierColor(mult),
+      zValue,
+      targetPoints: mu + zValue * sigma,
+      payout: stake * mult,
+    };
+  });
 }
 
 /**
