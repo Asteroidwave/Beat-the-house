@@ -299,10 +299,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     };
   }, [picks]);
   
-  // Calculate dynamic targets based on lineup μ and σ (using smoothed values and custom multipliers)
+  // Calculate dynamic targets based on lineup μ and σ (using smoothed values and ENABLED custom multipliers only)
   const targets: TargetThreshold[] = useMemo(() => {
-    return calculateTargets(lineupStats.muSmooth, lineupStats.sigmaSmooth, stake, customMultipliers);
-  }, [lineupStats.muSmooth, lineupStats.sigmaSmooth, stake, customMultipliers]);
+    // Filter to only enabled multipliers
+    const activeMultipliers = customMultipliers.filter((_, index) => enabledTargetIndices.has(index));
+    return calculateTargets(lineupStats.muSmooth, lineupStats.sigmaSmooth, stake, activeMultipliers);
+  }, [lineupStats.muSmooth, lineupStats.sigmaSmooth, stake, customMultipliers, enabledTargetIndices]);
   
   const isSalaryValid = lineupStats.totalSalary >= SALARY_MIN && lineupStats.totalSalary <= SALARY_MAX;
   const canPlay = isSalaryValid && stake >= STAKE_MIN && stake <= STAKE_MAX && stake <= bankroll && lineupStats.mu > 0;
