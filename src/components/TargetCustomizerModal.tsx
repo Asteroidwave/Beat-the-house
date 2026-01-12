@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Settings2, Check } from 'lucide-react';
+import { X, Settings2, Check, RotateCcw } from 'lucide-react';
 import { useGame } from '@/contexts/GameContext';
 import { computeDynamicZValues, getMultiplierColor, calculateExpectedReturn } from '@/lib/oddsStatistics';
 import { TargetProgressBar } from './TargetProgressBar';
@@ -103,24 +103,24 @@ function CompactSlider({
   const color = getMultiplierColor(multiplier);
   
   return (
-    <div className={`flex items-center gap-3 py-2 ${!isEnabled ? 'opacity-40' : ''}`}>
+    <div className={`flex items-center gap-4 py-3 ${!isEnabled ? 'opacity-40' : ''}`}>
       {/* Toggle Button */}
       <button
         onClick={() => (canDisable || !isEnabled) && onToggle(index)}
         disabled={!canDisable && isEnabled}
-        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+        className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
           isEnabled 
             ? 'border-accent bg-accent' 
             : 'border-border bg-transparent hover:border-accent/50'
         } ${!canDisable && isEnabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
         title={isEnabled ? (canDisable ? 'Click to disable' : 'At least one target required') : 'Click to enable'}
       >
-        {isEnabled && <Check className="w-3 h-3 text-white" />}
+        {isEnabled && <Check className="w-4 h-4 text-white" />}
       </button>
       
       {/* Multiplier Badge */}
       <span 
-        className={`text-xs font-bold px-2 py-0.5 rounded min-w-[40px] text-center transition-transform ${isSnapping ? 'scale-110' : ''}`}
+        className={`text-sm font-bold px-2.5 py-1 rounded min-w-[50px] text-center transition-transform flex-shrink-0 ${isSnapping ? 'scale-110' : ''}`}
         style={{ backgroundColor: isEnabled ? color : '#64748b', color: 'white' }}
       >
         {multiplier.toFixed(1)}x
@@ -129,7 +129,7 @@ function CompactSlider({
       {/* Slider Track */}
       <div 
         ref={sliderRef}
-        className={`flex-1 relative h-2 bg-surface-hover rounded-full ${
+        className={`flex-1 relative h-3 bg-surface-hover rounded-full ${
           isDragging ? 'cursor-grabbing' : isEnabled ? 'cursor-grab' : 'cursor-not-allowed'
         }`}
       >
@@ -143,7 +143,7 @@ function CompactSlider({
         />
         
         <div
-          className={`absolute top-1/2 w-4 h-4 rounded-full shadow-lg border-2 border-white transition-all ${
+          className={`absolute top-1/2 w-5 h-5 rounded-full shadow-lg border-2 border-white transition-all ${
             isDragging ? 'scale-125' : ''
           } ${isSnapping ? 'ring-2 ring-white/50' : ''}`}
           style={{ 
@@ -156,7 +156,7 @@ function CompactSlider({
       </div>
       
       {/* Hit Probability */}
-      <span className="text-[10px] text-text-muted w-12 text-right">
+      <span className="text-sm text-text-muted w-14 text-right flex-shrink-0 tabular-nums">
         {isEnabled ? `${(tailProb * 100).toFixed(0)}%` : '—'}
       </span>
     </div>
@@ -169,6 +169,7 @@ interface TargetCustomizerModalProps {
 }
 
 export function TargetCustomizerModal({ isOpen, onClose }: TargetCustomizerModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
   const { 
     customMultipliers, 
     setCustomMultipliers,
@@ -176,7 +177,6 @@ export function TargetCustomizerModal({ isOpen, onClose }: TargetCustomizerModal
     setEnabledTargetIndices,
     lineupStats,
     stake,
-    targets,
   } = useGame();
   
   // Local state for editing (apply on close)
@@ -190,6 +190,20 @@ export function TargetCustomizerModal({ isOpen, onClose }: TargetCustomizerModal
       setLocalEnabled(enabledTargetIndices);
     }
   }, [isOpen, customMultipliers, enabledTargetIndices]);
+  
+  // Close on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen, onClose]);
   
   // Compute preview targets
   const activeMultipliers = localMultipliers.filter((_, i) => localEnabled.has(i));
@@ -304,43 +318,55 @@ export function TargetCustomizerModal({ isOpen, onClose }: TargetCustomizerModal
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-surface border border-border rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+      <div 
+        ref={modalRef}
+        className="bg-surface border border-border rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden"
+      >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Settings2 className="w-5 h-5 text-accent" />
-            <h2 className="font-bold text-text-primary">Customize Targets</h2>
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
+              <Settings2 className="w-5 h-5 text-accent" />
+            </div>
+            <div>
+              <h2 className="font-bold text-text-primary text-lg">Customize Targets</h2>
+              <p className="text-xs text-text-muted">Drag sliders or toggle tiers on/off</p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-surface-elevated text-text-muted hover:text-text-primary transition-colors"
+            className="p-2 rounded-lg hover:bg-surface-elevated text-text-muted hover:text-text-primary transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
         
-        {/* Preview Progress Bar */}
-        <div className="px-5 py-4 border-b border-border bg-surface-elevated/30">
-          <p className="text-xs text-text-muted mb-2">Preview</p>
+        {/* Preview Progress Bar - Animated positions */}
+        <div className="px-6 py-5 border-b border-border bg-surface-elevated/30">
+          <p className="text-xs text-text-muted mb-3 uppercase tracking-wide font-medium">Live Preview</p>
           <TargetProgressBar
             targets={previewTargets}
             isActive={lineupStats.totalSalary >= 20000}
+            animatePositions={true}
           />
         </div>
         
         {/* Sliders */}
-        <div className="px-5 py-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-text-muted">Drag to adjust • Click checkbox to toggle</p>
+        <div className="px-6 py-5">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-text-secondary">
+              Adjust multipliers between <span className="font-semibold">0.5x</span> and <span className="font-semibold">15x</span>
+            </p>
             <button
               onClick={handleReset}
-              className="text-xs text-accent hover:underline"
+              className="flex items-center gap-1.5 text-sm text-accent hover:underline"
             >
-              Reset to default
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset
             </button>
           </div>
           
-          <div className="space-y-1">
+          <div className="space-y-1 divide-y divide-border/50">
             {sortedSliders.map(({ index, multiplier, isEnabled }) => {
               const bounds = getSliderBounds(index);
               const data = zValuesData.find(d => Math.abs(d.multiplier - multiplier) < 0.001);
@@ -364,37 +390,38 @@ export function TargetCustomizerModal({ isOpen, onClose }: TargetCustomizerModal
         </div>
         
         {/* Expected Return */}
-        <div className="px-5 py-3 border-t border-border bg-surface-elevated/30">
+        <div className="px-6 py-4 border-t border-border bg-surface-elevated/30">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-text-muted">Expected Return</span>
-            <div className="flex items-center gap-2">
-              <div className="w-20 h-1.5 bg-surface-hover rounded-full overflow-hidden">
+            <span className="text-sm text-text-muted">Expected Return to Player</span>
+            <div className="flex items-center gap-3">
+              <div className="w-24 h-2 bg-surface-hover rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-accent rounded-full transition-all"
                   style={{ width: `${expectedReturn * 100}%` }}
                 />
               </div>
-              <span className="text-sm font-bold text-accent">
+              <span className="text-lg font-bold text-accent tabular-nums">
                 {(expectedReturn * 100).toFixed(0)}%
               </span>
             </div>
           </div>
+          <p className="text-xs text-text-muted mt-1">House edge: {((1 - expectedReturn) * 100).toFixed(0)}%</p>
         </div>
         
         {/* Actions */}
-        <div className="px-5 py-4 border-t border-border flex gap-3">
+        <div className="px-6 py-4 border-t border-border flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-lg border border-border text-text-secondary hover:bg-surface-elevated transition-colors font-medium"
+            className="flex-1 py-3 rounded-xl border border-border text-text-secondary hover:bg-surface-elevated transition-colors font-medium"
           >
             Cancel
           </button>
           <button
             onClick={handleApply}
-            className="flex-1 py-2.5 rounded-lg bg-accent text-white hover:bg-accent/90 transition-colors font-bold flex items-center justify-center gap-2"
+            className="flex-1 py-3 rounded-xl bg-accent text-white hover:bg-accent/90 transition-colors font-bold flex items-center justify-center gap-2"
           >
             <Check className="w-4 h-4" />
-            Apply
+            Apply Changes
           </button>
         </div>
       </div>

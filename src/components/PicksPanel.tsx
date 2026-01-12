@@ -149,7 +149,7 @@ export function PicksPanel() {
         {picks.length > 0 && (
           <button
             onClick={clearPicks}
-            className="mt-2 w-full py-1.5 text-xs text-error hover:text-white hover:bg-error/80 border border-error/30 rounded-lg transition-all flex items-center justify-center gap-1"
+            className="mt-2 w-full py-1.5 text-xs text-red-500 hover:text-white hover:bg-red-500 border border-red-300 dark:border-red-500/30 rounded-lg transition-all flex items-center justify-center gap-1"
           >
             <Trash2 className="w-3 h-3" />
             Clear All Picks

@@ -8,19 +8,43 @@ interface TargetProgressBarProps {
   actualPoints?: number;  // Only shown in results
   showResults?: boolean;
   isActive: boolean;  // Whether lineup meets salary requirements
+  animatePositions?: boolean; // When true, positions scale with multiplier values
+}
+
+// Helper: calculate position based on multiplier value (0.5x to 15x range)
+function getPositionForMultiplier(mult: number): number {
+  // Use logarithmic scale for better visual distribution
+  const MIN_MULT = 0.5;
+  const MAX_MULT = 15;
+  const logMin = Math.log(MIN_MULT);
+  const logMax = Math.log(MAX_MULT);
+  const logValue = Math.log(mult);
+  
+  // Map to 5% - 95% range
+  const normalizedPosition = (logValue - logMin) / (logMax - logMin);
+  return 5 + normalizedPosition * 90;
 }
 
 export function TargetProgressBar({ 
   targets, 
   actualPoints,
   showResults = false,
-  isActive 
+  isActive,
+  animatePositions = false,
 }: TargetProgressBarProps) {
-  // Fixed positions for each multiplier tier (evenly spaced)
-  const tierPositions = [15, 40, 65, 90]; // percentage positions
+  // Default fixed positions (evenly spaced)
+  const defaultPositions = [15, 40, 65, 90];
   
   // Sort targets by multiplier
   const sortedTargets = [...targets].sort((a, b) => a.multiplier - b.multiplier);
+  
+  // Get position for each target
+  const getPosition = (index: number): number => {
+    if (animatePositions) {
+      return getPositionForMultiplier(sortedTargets[index]?.multiplier || 1);
+    }
+    return defaultPositions[index] || (15 + (index * 25));
+  };
 
   // Determine which tier was achieved (for results)
   const achievedTierIndex = showResults && actualPoints !== undefined
@@ -28,38 +52,31 @@ export function TargetProgressBar({
     : -1;
 
   // Calculate actual points position for results
-  // The key insight: when you HIT a tier, the bar should extend PAST that tier's badge
   const getActualPosition = () => {
     if (!showResults || actualPoints === undefined || sortedTargets.length === 0) return 0;
     
-    // Find which tier was achieved
     const achievedIdx = sortedTargets.filter(t => actualPoints >= t.targetPoints).length;
     
     if (achievedIdx === 0) {
-      // Didn't hit any tier - show progress toward first tier
       const firstTarget = sortedTargets[0]?.targetPoints || 100;
-      const progress = (actualPoints / firstTarget) * tierPositions[0];
-      return Math.max(0, Math.min(tierPositions[0] - 2, progress)); // Stay below 0.5x badge
+      const firstPos = getPosition(0);
+      const progress = (actualPoints / firstTarget) * firstPos;
+      return Math.max(0, Math.min(firstPos - 2, progress));
     }
     
-    // Hit at least one tier - fill should extend past the achieved tier's badge
-    const achievedTierPosition = tierPositions[achievedIdx - 1];
+    const achievedTierPosition = getPosition(achievedIdx - 1);
     
     if (achievedIdx >= sortedTargets.length) {
-      // Hit the highest tier - fill to end with some extra
       return 100;
     }
     
-    // Calculate how far between achieved tier and next tier
     const achievedTarget = sortedTargets[achievedIdx - 1]?.targetPoints || 0;
     const nextTarget = sortedTargets[achievedIdx]?.targetPoints || achievedTarget * 1.5;
-    const nextPosition = tierPositions[achievedIdx];
+    const nextPosition = getPosition(achievedIdx);
     
-    // Progress between achieved tier badge and next tier badge
     const progressInRange = (actualPoints - achievedTarget) / (nextTarget - achievedTarget);
     const positionInRange = achievedTierPosition + (progressInRange * (nextPosition - achievedTierPosition));
     
-    // Ensure we're at least past the achieved tier badge (+ 3% buffer)
     return Math.max(achievedTierPosition + 3, Math.min(nextPosition - 2, positionInRange));
   };
 
@@ -68,17 +85,17 @@ export function TargetProgressBar({
       {/* Points needed (TOP) */}
       <div className="relative h-5">
         {sortedTargets.map((target, index) => {
-          const position = tierPositions[index];
+          const position = getPosition(index);
           const isAchieved = showResults && achievedTierIndex > index;
           
           return (
             <div
-              key={`points-${target.label}`}
-              className="absolute transform -translate-x-1/2"
+              key={`points-${target.label}-${index}`}
+              className="absolute transform -translate-x-1/2 transition-all duration-300"
               style={{ left: `${position}%` }}
             >
               <span 
-                className={`text-[10px] font-semibold ${
+                className={`text-[10px] font-semibold whitespace-nowrap ${
                   isAchieved ? 'text-text-muted line-through' : 'text-text-secondary'
                 }`}
               >
@@ -93,14 +110,14 @@ export function TargetProgressBar({
       <div className="relative h-8 bg-surface-hover rounded-full overflow-hidden">
         {/* Multiplier badges inside the bar */}
         {sortedTargets.map((target, index) => {
-          const position = tierPositions[index];
+          const position = getPosition(index);
           const isAchieved = showResults && achievedTierIndex > index;
           const isCurrentTier = showResults && achievedTierIndex === index + 1;
           
           return (
             <div
-              key={`badge-${target.label}`}
-              className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20"
+              key={`badge-${target.label}-${index}`}
+              className="absolute top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 transition-all duration-300"
               style={{ left: `${position}%` }}
             >
               <div 
@@ -121,11 +138,11 @@ export function TargetProgressBar({
         
         {/* Vertical markers at each threshold */}
         {sortedTargets.map((target, index) => {
-          const position = tierPositions[index];
+          const position = getPosition(index);
           return (
             <div
-              key={`marker-${target.label}`}
-              className="absolute top-0 bottom-0 w-0.5 z-10"
+              key={`marker-${target.label}-${index}`}
+              className="absolute top-0 bottom-0 w-0.5 z-10 transition-all duration-300"
               style={{ 
                 left: `${position}%`,
                 backgroundColor: target.color,
@@ -152,18 +169,18 @@ export function TargetProgressBar({
       {/* Payout amounts (BOTTOM) */}
       <div className="relative h-5">
         {sortedTargets.map((target, index) => {
-          const position = tierPositions[index];
+          const position = getPosition(index);
           const isAchieved = showResults && achievedTierIndex > index;
           const isCurrentTier = showResults && achievedTierIndex === index + 1;
           
           return (
             <div
-              key={`payout-${target.label}`}
-              className="absolute transform -translate-x-1/2"
+              key={`payout-${target.label}-${index}`}
+              className="absolute transform -translate-x-1/2 transition-all duration-300"
               style={{ left: `${position}%` }}
             >
               <span 
-                className={`text-[10px] font-semibold ${
+                className={`text-[10px] font-semibold whitespace-nowrap ${
                   isCurrentTier 
                     ? 'text-success' 
                     : isAchieved 

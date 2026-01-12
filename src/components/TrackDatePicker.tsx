@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, MapPin, X } from 'lucide-react';
 
 interface TrackDatePickerProps {
@@ -38,10 +38,7 @@ export function TrackDatePicker({
   isOpen,
   onClose,
 }: TrackDatePickerProps) {
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const date = new Date(selectedDate || new Date());
-    return { year: date.getFullYear(), month: date.getMonth() };
-  });
+  const modalRef = useRef<HTMLDivElement>(null);
   
   // Get available dates for selected track
   const trackData = availableTracks.find(t => t.code === selectedTrack);
@@ -50,22 +47,44 @@ export function TrackDatePicker({
     return new Set(trackData.dates);
   }, [trackData]);
   
-  // Get available months for the track
+  // Get available months for the track (only 2025)
   const availableMonths = useMemo(() => {
     if (!trackData) return [];
     const months = new Set<string>();
     trackData.dates.forEach(date => {
       const d = new Date(date);
-      months.add(`${d.getFullYear()}-${d.getMonth()}`);
+      // Only include 2025 data
+      if (d.getFullYear() === 2025) {
+        months.add(`2025-${d.getMonth()}`);
+      }
     });
-    return Array.from(months).sort();
+    return Array.from(months)
+      .map(m => {
+        const [year, month] = m.split('-').map(Number);
+        return { year, month };
+      })
+      .sort((a, b) => a.month - b.month);
   }, [trackData]);
   
-  // Check if current month has any race days
-  const hasRaceDaysInMonth = useMemo(() => {
-    const key = `${currentMonth.year}-${currentMonth.month}`;
-    return availableMonths.includes(key);
-  }, [availableMonths, currentMonth]);
+  // Initialize to first available month for the track, or current selection
+  const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
+  
+  // Reset month index when track changes
+  useEffect(() => {
+    if (availableMonths.length > 0 && selectedDate) {
+      const date = new Date(selectedDate);
+      const idx = availableMonths.findIndex(m => m.month === date.getMonth() && m.year === date.getFullYear());
+      if (idx >= 0) {
+        setCurrentMonthIndex(idx);
+      } else {
+        setCurrentMonthIndex(0);
+      }
+    } else {
+      setCurrentMonthIndex(0);
+    }
+  }, [selectedTrack, availableMonths, selectedDate]);
+  
+  const currentMonth = availableMonths[currentMonthIndex] || { year: 2025, month: 0 };
   
   // Generate calendar days
   const calendarDays = useMemo(() => {
@@ -101,8 +120,8 @@ export function TrackDatePicker({
       });
     }
     
-    // Next month padding
-    const remaining = 42 - days.length; // 6 rows * 7 days
+    // Next month padding to fill grid
+    const remaining = 42 - days.length;
     for (let i = 1; i <= remaining; i++) {
       const date = new Date(currentMonth.year, currentMonth.month + 1, i);
       days.push({
@@ -117,21 +136,15 @@ export function TrackDatePicker({
   }, [currentMonth, availableDatesSet, selectedDate]);
   
   const goToPrevMonth = () => {
-    setCurrentMonth(prev => {
-      if (prev.month === 0) {
-        return { year: prev.year - 1, month: 11 };
-      }
-      return { ...prev, month: prev.month - 1 };
-    });
+    if (currentMonthIndex > 0) {
+      setCurrentMonthIndex(currentMonthIndex - 1);
+    }
   };
   
   const goToNextMonth = () => {
-    setCurrentMonth(prev => {
-      if (prev.month === 11) {
-        return { year: prev.year + 1, month: 0 };
-      }
-      return { ...prev, month: prev.month + 1 };
-    });
+    if (currentMonthIndex < availableMonths.length - 1) {
+      setCurrentMonthIndex(currentMonthIndex + 1);
+    }
   };
   
   const handleDateSelect = (day: typeof calendarDays[0]) => {
@@ -141,40 +154,57 @@ export function TrackDatePicker({
     onClose();
   };
   
+  // Close on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen, onClose]);
+  
   if (!isOpen) return null;
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-surface border border-border rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+      <div 
+        ref={modalRef}
+        className="bg-surface border border-border rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+      >
         {/* Header */}
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-accent" />
-            <h2 className="font-bold text-text-primary">Select Race Date</h2>
+            <h2 className="font-bold text-text-primary text-lg">Select Race Date</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-surface-elevated text-text-muted hover:text-text-primary transition-colors"
+            className="p-2 rounded-lg hover:bg-surface-elevated text-text-muted hover:text-text-primary transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
         
         {/* Track Selector */}
-        <div className="px-4 py-3 border-b border-border">
-          <label className="text-xs text-text-muted mb-2 block flex items-center gap-1">
-            <MapPin className="w-3 h-3" />
-            Track
+        <div className="px-5 py-4 border-b border-border">
+          <label className="text-xs text-text-muted mb-3 block flex items-center gap-1 uppercase tracking-wide">
+            <MapPin className="w-3.5 h-3.5" />
+            Select Track
           </label>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {availableTracks.map(track => (
               <button
                 key={track.code}
                 onClick={() => onTrackChange(track.code)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                className={`px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                   selectedTrack === track.code
-                    ? 'bg-accent text-white'
-                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-hover'
+                    ? 'bg-accent text-white shadow-lg shadow-accent/30'
+                    : 'bg-surface-elevated text-text-secondary hover:bg-surface-hover hover:text-text-primary'
                 }`}
               >
                 {track.code}
@@ -182,89 +212,119 @@ export function TrackDatePicker({
             ))}
           </div>
           {trackData && (
-            <p className="text-xs text-text-muted mt-2">
-              {TRACK_NAMES[trackData.code] || trackData.code} • {trackData.dates.length} race days
+            <p className="text-sm text-text-muted mt-3">
+              <span className="font-medium text-text-primary">{TRACK_NAMES[trackData.code] || trackData.code}</span>
+              <span className="mx-2">•</span>
+              <span>{trackData.dates.filter(d => new Date(d).getFullYear() === 2025).length} race days in 2025</span>
             </p>
           )}
         </div>
         
         {/* Calendar */}
-        <div className="p-4">
-          {/* Month Navigation */}
-          <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={goToPrevMonth}
-              className="p-1.5 rounded-lg hover:bg-surface-elevated text-text-muted hover:text-text-primary transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <h3 className="font-semibold text-text-primary">
-              {MONTHS[currentMonth.month]} {currentMonth.year}
-            </h3>
-            <button
-              onClick={goToNextMonth}
-              className="p-1.5 rounded-lg hover:bg-surface-elevated text-text-muted hover:text-text-primary transition-colors"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-          
-          {/* Day headers */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-              <div key={day} className="text-center text-xs font-medium text-text-muted py-1">
-                {day}
+        <div className="p-5">
+          {availableMonths.length === 0 ? (
+            <div className="text-center py-8 text-text-muted">
+              <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p>No race days available for this track in 2025</p>
+            </div>
+          ) : (
+            <>
+              {/* Month Navigation - Only within available months */}
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  onClick={goToPrevMonth}
+                  disabled={currentMonthIndex === 0}
+                  className={`p-2 rounded-lg transition-colors ${
+                    currentMonthIndex === 0
+                      ? 'text-text-muted/30 cursor-not-allowed'
+                      : 'hover:bg-surface-elevated text-text-muted hover:text-text-primary'
+                  }`}
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <div className="text-center">
+                  <h3 className="font-bold text-text-primary text-lg">
+                    {MONTHS[currentMonth.month]} {currentMonth.year}
+                  </h3>
+                  <p className="text-xs text-text-muted">
+                    {currentMonthIndex + 1} of {availableMonths.length} months
+                  </p>
+                </div>
+                <button
+                  onClick={goToNextMonth}
+                  disabled={currentMonthIndex === availableMonths.length - 1}
+                  className={`p-2 rounded-lg transition-colors ${
+                    currentMonthIndex === availableMonths.length - 1
+                      ? 'text-text-muted/30 cursor-not-allowed'
+                      : 'hover:bg-surface-elevated text-text-muted hover:text-text-primary'
+                  }`}
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
               </div>
-            ))}
-          </div>
-          
-          {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-1">
-            {calendarDays.map((day, index) => (
-              <button
-                key={index}
-                onClick={() => handleDateSelect(day)}
-                disabled={!day.hasRaces || !day.isCurrentMonth}
-                className={`
-                  aspect-square flex items-center justify-center text-sm rounded-lg transition-all
-                  ${!day.isCurrentMonth ? 'text-text-muted/30' : ''}
-                  ${day.isCurrentMonth && !day.hasRaces ? 'text-text-muted cursor-not-allowed' : ''}
-                  ${day.hasRaces && day.isCurrentMonth ? 'bg-success/20 text-success hover:bg-success hover:text-white font-medium cursor-pointer' : ''}
-                  ${day.isSelected ? 'bg-error text-white ring-2 ring-error ring-offset-2 ring-offset-surface' : ''}
-                `}
-              >
-                {day.date.getDate()}
-              </button>
-            ))}
-          </div>
-          
-          {/* Legend */}
-          <div className="flex items-center justify-center gap-4 mt-4 text-xs text-text-muted">
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-success/20" />
-              <span>Race Day</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-error" />
-              <span>Selected</span>
-            </div>
-          </div>
+              
+              {/* Day headers */}
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                  <div key={day} className="text-center text-xs font-semibold text-text-muted py-2">
+                    {day}
+                  </div>
+                ))}
+              </div>
+              
+              {/* Calendar grid */}
+              <div className="grid grid-cols-7 gap-1">
+                {calendarDays.map((day, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleDateSelect(day)}
+                    disabled={!day.hasRaces || !day.isCurrentMonth}
+                    className={`
+                      aspect-square flex items-center justify-center text-sm rounded-xl transition-all font-medium
+                      ${!day.isCurrentMonth ? 'text-text-muted/20' : ''}
+                      ${day.isCurrentMonth && !day.hasRaces ? 'text-text-muted/50 cursor-not-allowed' : ''}
+                      ${day.hasRaces && day.isCurrentMonth && !day.isSelected 
+                        ? 'bg-blue-500/20 text-blue-500 hover:bg-blue-500 hover:text-white cursor-pointer' 
+                        : ''}
+                      ${day.isSelected 
+                        ? 'bg-red-500 text-white ring-2 ring-red-500 ring-offset-2 ring-offset-surface shadow-lg' 
+                        : ''}
+                    `}
+                  >
+                    {day.date.getDate()}
+                  </button>
+                ))}
+              </div>
+              
+              {/* Legend */}
+              <div className="flex items-center justify-center gap-6 mt-5 text-xs text-text-muted">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-blue-500/20 border border-blue-500/30" />
+                  <span>Race Day</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-red-500" />
+                  <span>Selected</span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
         
         {/* Current Selection */}
         {selectedDate && (
-          <div className="px-4 py-3 border-t border-border bg-surface-elevated/50">
+          <div className="px-5 py-4 border-t border-border bg-surface-elevated/50">
             <p className="text-sm text-center">
-              <span className="text-text-muted">Selected: </span>
+              <span className="text-text-muted">Current: </span>
               <span className="font-bold text-text-primary">
                 {new Date(selectedDate).toLocaleDateString('en-US', {
                   weekday: 'long',
-                  year: 'numeric',
                   month: 'long',
                   day: 'numeric',
+                  year: 'numeric',
                 })}
               </span>
-              <span className="text-text-muted"> at </span>
+              <span className="text-text-muted"> @ </span>
               <span className="font-bold text-accent">{TRACK_NAMES[selectedTrack] || selectedTrack}</span>
             </p>
           </div>
