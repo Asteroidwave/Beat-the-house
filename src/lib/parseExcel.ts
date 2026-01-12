@@ -1,9 +1,21 @@
 import * as XLSX from 'xlsx';
-import { Connection, HorseEntry, RaceInfo, OddsBucketStats } from '@/types';
+import { Connection, HorseEntry, RaceInfo, OddsBucketStats, AvailableDate } from '@/types';
 import { buildOddsBucketStats, getHorseStats } from './oddsStatistics';
 
 // Minimum scratches threshold - dates with more than this many scratches are excluded
 const MAX_SCRATCHES_PER_DAY = 10;
+
+// Available tracks
+export const AVAILABLE_TRACKS = [
+  { code: 'AQU', name: 'Aqueduct', file: 'AQU_20250101_V11_COMPLETE.xlsx' },
+  { code: 'SA', name: 'Santa Anita', file: 'SA_20250101_V11_COMPLETE.xlsx' },
+  { code: 'GP', name: 'Gulfstream Park', file: 'GP_20250101_V11_COMPLETE.xlsx' },
+  { code: 'DMR', name: 'Del Mar', file: 'DMR_20250101_V11_COMPLETE.xlsx' },
+  { code: 'PRX', name: 'Parx Racing', file: 'PRX_20250101_V11_COMPLETE.xlsx' },
+  { code: 'PEN', name: 'Penn National', file: 'PEN_20250101_V11_COMPLETE.xlsx' },
+  { code: 'LRL', name: 'Laurel Park', file: 'LRL_20250101_V11_COMPLETE.xlsx' },
+  { code: 'MVR', name: 'Mountaineer', file: 'MVR_20250101_V11_COMPLETE.xlsx' },
+];
 
 interface RawHorseRow {
   Date: string;
@@ -56,7 +68,8 @@ interface RawStatsRow {
   'ITM %': number;
 }
 
-let cachedData: {
+interface TrackData {
+  trackCode: string;
   horses: HorseEntry[];
   jockeys: Map<string, Connection>;
   trainers: Map<string, Connection>;
@@ -67,12 +80,31 @@ let cachedData: {
     sires: Map<string, { avpa90d: number }>;
   };
   oddsBucketStats: Map<string, OddsBucketStats>;
-} | null = null;
+  dates: string[];
+}
 
-export async function loadExcelData() {
-  if (cachedData) return cachedData;
+// Cache for loaded track data
+const trackCache = new Map<string, TrackData>();
 
-  const response = await fetch('/AQU_20251101_V6_COMPLETE.xlsx');
+/**
+ * Load data for a specific track
+ */
+export async function loadTrackData(trackCode: string): Promise<TrackData> {
+  // Check cache
+  if (trackCache.has(trackCode)) {
+    return trackCache.get(trackCode)!;
+  }
+
+  const track = AVAILABLE_TRACKS.find(t => t.code === trackCode);
+  if (!track) {
+    throw new Error(`Unknown track: ${trackCode}`);
+  }
+
+  const response = await fetch(`/${track.file}`);
+  if (!response.ok) {
+    throw new Error(`Failed to load data for ${trackCode}`);
+  }
+  
   const arrayBuffer = await response.arrayBuffer();
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
@@ -134,7 +166,7 @@ export async function loadExcelData() {
       salary: row['New Sal.'] || 0,
       apps: row['New Apps'] || 0,
       avgOdds: row['New Avg. Odds'] || 0,
-      avpa90d: 0, // Will be filled from stats
+      avpa90d: 0,
       trackAvpa: row['Track AVPA'] || 0,
       totalPoints: row['Total Points'] || 0,
       wins: row.Win || 0,
@@ -142,7 +174,6 @@ export async function loadExcelData() {
       shows: row.Show || 0,
       winPct: row['Win %'] || 0,
       itmPct: row['ITM %'] || 0,
-      // Will be calculated per date
       mu: 0,
       variance: 0,
       sigma: 0,
@@ -239,7 +270,13 @@ export async function loadExcelData() {
     sireStats.set(row.Name, { avpa90d: row['90d AVPA'] || 0 });
   });
 
-  cachedData = {
+  // Get unique dates
+  const dateSet = new Set<string>();
+  horses.forEach(h => dateSet.add(h.date));
+  const dates = Array.from(dateSet).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+  const trackData: TrackData = {
+    trackCode,
     horses,
     jockeys,
     trainers,
@@ -250,15 +287,22 @@ export async function loadExcelData() {
       sires: sireStats,
     },
     oddsBucketStats,
+    dates,
   };
 
-  return cachedData;
+  // Cache the data
+  trackCache.set(trackCode, trackData);
+
+  return trackData;
 }
 
-export async function getDataForDate(date: string) {
-  const data = await loadExcelData();
+/**
+ * Get data for a specific date and track
+ */
+export async function getDataForDate(date: string, trackCode: string = 'AQU') {
+  const data = await loadTrackData(trackCode);
 
-  // Filter horses for this date (only non-scratched for stats)
+  // Filter horses for this date
   const dayHorses = data.horses.filter((h) => h.date === date);
   const validDayHorses = dayHorses.filter((h) => !h.isScratched);
 
@@ -287,7 +331,7 @@ export async function getDataForDate(date: string) {
   const calculateConnectionStats = (
     connectionName: string,
     role: 'jockey' | 'trainer' | 'sire'
-  ): { mu: number; variance: number; sigma: number; muSmooth: number; varianceSmooth: number; sigmaSmooth: number; horseIds: string[] } => {
+  ) => {
     const connHorses = validDayHorses.filter((h) => {
       if (role === 'jockey') return h.jockey === connectionName;
       if (role === 'trainer') return h.trainer === connectionName;
@@ -295,7 +339,6 @@ export async function getDataForDate(date: string) {
       return false;
     });
 
-    // Sum μ and variance across horses (σ = sqrt(sum of variances))
     const mu = connHorses.reduce((sum, h) => sum + h.mu, 0);
     const variance = connHorses.reduce((sum, h) => sum + h.variance, 0);
     const sigma = Math.sqrt(variance);
@@ -363,9 +406,140 @@ export async function getDataForDate(date: string) {
   return { races, connections, horses: dayHorses, oddsBucketStats: data.oddsBucketStats };
 }
 
+/**
+ * Get all available tracks with their race dates
+ */
+export async function getAvailableTracks(): Promise<{ code: string; name: string; dates: string[] }[]> {
+  const tracks: { code: string; name: string; dates: string[] }[] = [];
+  
+  for (const track of AVAILABLE_TRACKS) {
+    try {
+      const data = await loadTrackData(track.code);
+      
+      // Filter dates with valid data
+      const validDates = data.dates.filter(date => {
+        const dayHorses = data.horses.filter(h => h.date === date);
+        const scratches = dayHorses.filter(h => h.isScratched).length;
+        const validHorses = dayHorses.length - scratches;
+        return validHorses > 0 && scratches <= MAX_SCRATCHES_PER_DAY;
+      });
+      
+      if (validDates.length > 0) {
+        tracks.push({
+          code: track.code,
+          name: track.name,
+          dates: validDates,
+        });
+      }
+    } catch (error) {
+      console.error(`Failed to load track ${track.code}:`, error);
+    }
+  }
+  
+  return tracks;
+}
+
+/**
+ * Get available dates for a specific track
+ */
+export async function getAvailableDates(trackCode: string = 'AQU'): Promise<AvailableDate[]> {
+  const data = await loadTrackData(trackCode);
+  
+  // Group horses by date
+  const dateMap = new Map<string, { total: number; scratches: number; races: Set<number> }>();
+  
+  data.horses.forEach((horse) => {
+    const existing = dateMap.get(horse.date) || { total: 0, scratches: 0, races: new Set() };
+    existing.total++;
+    existing.races.add(horse.race);
+    if (horse.isScratched) {
+      existing.scratches++;
+    }
+    dateMap.set(horse.date, existing);
+  });
+  
+  // Filter and format dates
+  const availableDates: AvailableDate[] = [];
+  
+  dateMap.forEach((stats, date) => {
+    const validHorses = stats.total - stats.scratches;
+    if (validHorses > 0 && stats.scratches <= MAX_SCRATCHES_PER_DAY) {
+      availableDates.push({
+        date,
+        raceCount: stats.races.size,
+        horseCount: stats.total,
+        scratchCount: stats.scratches,
+      });
+    }
+  });
+  
+  // Sort by date (newest first)
+  return availableDates.sort((a, b) => {
+    const dateA = new Date(a.date);
+    const dateB = new Date(b.date);
+    return dateB.getTime() - dateA.getTime();
+  });
+}
+
+/**
+ * Get historical performance for a connection across all available data
+ */
+export async function getConnectionHistory(
+  connectionName: string,
+  role: 'jockey' | 'trainer' | 'sire',
+  trackCode: string = 'AQU'
+): Promise<{
+  date: string;
+  raceNumber: number;
+  horseName: string;
+  finish: number;
+  odds: string;
+  expectedPoints: number;
+  actualPoints: number;
+}[]> {
+  const data = await loadTrackData(trackCode);
+  
+  const history: {
+    date: string;
+    raceNumber: number;
+    horseName: string;
+    finish: number;
+    odds: string;
+    expectedPoints: number;
+    actualPoints: number;
+  }[] = [];
+  
+  data.horses.forEach((horse) => {
+    if (horse.isScratched) return;
+    
+    let isMatch = false;
+    if (role === 'jockey' && horse.jockey === connectionName) isMatch = true;
+    if (role === 'trainer' && horse.trainer === connectionName) isMatch = true;
+    if (role === 'sire' && (horse.sire1 === connectionName || horse.sire2 === connectionName)) isMatch = true;
+    
+    if (isMatch) {
+      history.push({
+        date: horse.date,
+        raceNumber: horse.race,
+        horseName: horse.horse,
+        finish: horse.finish,
+        odds: horse.mlOdds,
+        expectedPoints: horse.muSmooth || 0,
+        actualPoints: horse.totalPoints || 0,
+      });
+    }
+  });
+  
+  // Sort by date (newest first), then by race number
+  return history.sort((a, b) => {
+    const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
+    if (dateCompare !== 0) return dateCompare;
+    return a.raceNumber - b.raceNumber;
+  });
+}
+
 export function calculateExpectedPoints(picks: Connection[]): number {
   return picks.reduce((sum, conn) => {
-    // Expected points = 90d AVPA * number of appearances
     return sum + conn.avpa90d * conn.apps;
   }, 0);
 }
@@ -398,24 +572,7 @@ export function calculateActualPoints(
 }
 
 /**
- * Calculate lineup stats with improved stacking adjustment using correlation model
- * 
- * When multiple connections share the same horse, their outcomes are perfectly correlated (ρ=1).
- * 
- * For variance of sum of correlated variables:
- * Var(X + Y) = Var(X) + Var(Y) + 2*Cov(X,Y)
- * 
- * When ρ=1 (perfect correlation):
- * Cov(X,Y) = σ_X * σ_Y
- * 
- * For stacked horses (same underlying horse for multiple connections):
- * - Each connection's variance from that horse is not independent
- * - We model this as: the horse's variance contributes once, but affects all connections equally
- * 
- * Implementation:
- * 1. Group connections by shared horses
- * 2. For shared horses, use max(variances) instead of sum (conservative correlation estimate)
- * 3. For independent parts, sum normally
+ * Calculate lineup stats with improved stacking adjustment
  */
 export function calculateLineupStatsWithStacking(
   picks: Connection[]
@@ -444,7 +601,6 @@ export function calculateLineupStatsWithStacking(
     };
   }
 
-  // Step 1: Build a map of horse → list of (pick, per-horse variance)
   const horseToPicksMap = new Map<string, { pick: Connection; perHorseVar: number; perHorseVarSmooth: number }[]>();
   
   picks.forEach((pick) => {
@@ -460,44 +616,27 @@ export function calculateLineupStatsWithStacking(
     });
   });
 
-  // Step 2: Calculate stacking stats
   const uniqueHorses = horseToPicksMap.size;
   let stackedHorses = 0;
   let adjustedVariance = 0;
   let adjustedVarianceSmooth = 0;
   
-  horseToPicksMap.forEach((pickList, horseId) => {
+  horseToPicksMap.forEach((pickList) => {
     if (pickList.length > 1) {
-      // This horse is stacked - connections are perfectly correlated
       stackedHorses++;
-      
-      // For perfectly correlated random variables with the same source:
-      // Var(X1 + X2 + ... + Xn) = (σ1 + σ2 + ... + σn)^2
-      // Instead of Var(X1) + Var(X2) + ... + Var(Xn)
-      // 
-      // This means we sum the standard deviations, then square
       const sumSigma = pickList.reduce((sum, p) => sum + Math.sqrt(p.perHorseVar), 0);
       const sumSigmaSmooth = pickList.reduce((sum, p) => sum + Math.sqrt(p.perHorseVarSmooth), 0);
-      
       adjustedVariance += sumSigma * sumSigma;
       adjustedVarianceSmooth += sumSigmaSmooth * sumSigmaSmooth;
     } else {
-      // Single connection for this horse - add variance normally
       adjustedVariance += pickList[0].perHorseVar;
       adjustedVarianceSmooth += pickList[0].perHorseVarSmooth;
     }
   });
 
-  // Step 3: Calculate μ (mean adds linearly regardless of correlation)
   const mu = picks.reduce((sum, p) => sum + p.mu, 0);
   const muSmooth = picks.reduce((sum, p) => sum + p.muSmooth, 0);
-
-  // Calculate naive variance (what we'd have without correlation adjustment)
   const naiveVariance = picks.reduce((sum, p) => sum + p.variance, 0);
-  
-  // Stacking adjustment shows the difference
-  // Note: with perfect correlation, adjusted variance is HIGHER than naive for stacks
-  // This is correct: when outcomes are correlated, variance is higher
   const stackingAdjustment = adjustedVariance - naiveVariance;
 
   return {
@@ -511,48 +650,4 @@ export function calculateLineupStatsWithStacking(
     stackedHorses,
     stackingAdjustment,
   };
-}
-
-/**
- * Get all available race dates from the Excel file
- * Filters out dates with no races or too many scratches
- */
-export async function getAvailableDates(): Promise<{ date: string; raceCount: number; horseCount: number; scratchCount: number }[]> {
-  const data = await loadExcelData();
-  
-  // Group horses by date
-  const dateMap = new Map<string, { total: number; scratches: number; races: Set<number> }>();
-  
-  data.horses.forEach((horse) => {
-    const existing = dateMap.get(horse.date) || { total: 0, scratches: 0, races: new Set() };
-    existing.total++;
-    existing.races.add(horse.race);
-    if (horse.isScratched) {
-      existing.scratches++;
-    }
-    dateMap.set(horse.date, existing);
-  });
-  
-  // Filter and format dates
-  const availableDates: { date: string; raceCount: number; horseCount: number; scratchCount: number }[] = [];
-  
-  dateMap.forEach((stats, date) => {
-    // Exclude dates with too many scratches or no valid horses
-    const validHorses = stats.total - stats.scratches;
-    if (validHorses > 0 && stats.scratches <= MAX_SCRATCHES_PER_DAY) {
-      availableDates.push({
-        date,
-        raceCount: stats.races.size,
-        horseCount: stats.total,
-        scratchCount: stats.scratches,
-      });
-    }
-  });
-  
-  // Sort by date (newest first)
-  return availableDates.sort((a, b) => {
-    const dateA = new Date(a.date);
-    const dateB = new Date(b.date);
-    return dateB.getTime() - dateA.getTime();
-  });
 }

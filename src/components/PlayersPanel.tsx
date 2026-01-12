@@ -2,8 +2,9 @@
 
 import React, { useState, useMemo } from 'react';
 import { useGame } from '@/contexts/GameContext';
-import { ConnectionRole } from '@/types';
-import { Plus, X, Filter } from 'lucide-react';
+import { ConnectionRole, Connection } from '@/types';
+import { Plus, X, Filter, Info } from 'lucide-react';
+import { ConnectionDetailModal } from './ConnectionDetailModal';
 
 type FilterType = 'all' | ConnectionRole;
 
@@ -45,6 +46,7 @@ export function PlayersPanel() {
   const [filter, setFilter] = useState<FilterType>('all');
   const [sortBy, setSortBy] = useState<'salary' | 'apps' | 'avgOdds' | 'name'>('salary');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
 
   // Filter connections based on selected horses
   const filteredByHorses = useMemo(() => {
@@ -218,19 +220,19 @@ export function PlayersPanel() {
                 {roleLabels[conn.role]}
               </button>
 
-              {/* Name - Clickable to filter starters */}
+              {/* Name - Clickable to open detail modal */}
               <button
-                onClick={() => !isScratched && togglePlayerFilter(conn)}
-                disabled={isScratched}
-                className="min-w-0 text-left"
-                title={isScratched ? 'Scratched' : 'Click to filter starters panel by this player'}
+                onClick={() => setSelectedConnection(conn)}
+                className="min-w-0 text-left group"
+                title="Click for detailed stats"
               >
-                <div className={`font-medium truncate ${isScratched ? 'line-through text-text-muted cursor-not-allowed' : isPicked ? colors.text : isFiltering ? 'text-accent underline' : 'text-primary hover:text-accent hover:underline'}`}>
-                  {conn.name}
+                <div className={`font-medium truncate flex items-center gap-1 ${isScratched ? 'line-through text-text-muted cursor-not-allowed' : isPicked ? colors.text : isFiltering ? 'text-accent' : 'text-primary'}`}>
+                  <span className="group-hover:text-accent group-hover:underline">{conn.name}</span>
+                  <Info className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" />
                   {isScratched && <span className="ml-1 text-xs text-error no-underline">(SCR)</span>}
                 </div>
                 <div className="text-xs text-muted">
-                  {conn.wins}-{conn.places}-{conn.shows}
+                  {conn.wins}-{conn.places}-{conn.shows} • μ: {conn.muSmooth.toFixed(0)}
                 </div>
               </button>
 
@@ -271,6 +273,24 @@ export function PlayersPanel() {
           </div>
         )}
       </div>
+      
+      {/* Connection Detail Modal */}
+      {selectedConnection && (
+        <ConnectionDetailModal
+          connection={selectedConnection}
+          horses={horses}
+          onClose={() => setSelectedConnection(null)}
+          isPicked={isConnectionPicked(selectedConnection.id)}
+          onAddPick={() => {
+            addPick(selectedConnection);
+            setSelectedConnection(null);
+          }}
+          onRemovePick={() => {
+            removePick(selectedConnection.id);
+            setSelectedConnection(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -6,71 +6,37 @@ import { PlayersPanel } from '@/components/PlayersPanel';
 import { PicksPanel } from '@/components/PicksPanel';
 import { ResultsView } from '@/components/ResultsView';
 import { HistoryPage } from '@/components/HistoryPage';
-import { Wallet, Sun, Moon, Calendar, ChevronDown, AlertTriangle, Home as HomeIcon, History } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { TrackDatePicker, TrackDateButton } from '@/components/TrackDatePicker';
+import { Wallet, Sun, Moon, AlertTriangle, Home as HomeIcon, History } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
-function DateSelector() {
-  const { selectedDate, setSelectedDate, availableDates } = useGame();
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-  
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-  
-  const currentDateInfo = availableDates.find(d => d.date === selectedDate);
+function TrackDateSelector() {
+  const { 
+    selectedTrack, 
+    setSelectedTrack, 
+    selectedDate, 
+    setSelectedDate, 
+    availableTracks 
+  } = useGame();
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
   
   return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-surface-elevated rounded-lg hover:bg-surface-hover transition-colors"
-      >
-        <Calendar className="w-4 h-4 text-text-muted" />
-        <div className="text-left">
-          <div className="text-xs text-text-muted uppercase tracking-wider">Date</div>
-          <div className="font-semibold text-text-primary">{formatDate(selectedDate)}</div>
-        </div>
-        <ChevronDown className={`w-4 h-4 text-text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-      
-      {isOpen && (
-        <div className="absolute top-full right-0 mt-2 w-64 bg-surface border border-border rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
-          <div className="p-2">
-            {availableDates.map((dateInfo) => (
-              <button
-                key={dateInfo.date}
-                onClick={() => {
-                  setSelectedDate(dateInfo.date);
-                  setIsOpen(false);
-                }}
-                className={`w-full flex items-center justify-between p-2 rounded-md transition-colors ${
-                  dateInfo.date === selectedDate
-                    ? 'bg-accent/20 text-accent'
-                    : 'hover:bg-surface-hover text-text-primary'
-                }`}
-              >
-                <span className="font-medium">{formatDate(dateInfo.date)}</span>
-                <span className="text-xs text-text-muted">
-                  {dateInfo.raceCount} races • {dateInfo.horseCount - dateInfo.scratchCount} horses
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    <>
+      <TrackDateButton
+        selectedTrack={selectedTrack}
+        selectedDate={selectedDate}
+        onClick={() => setIsPickerOpen(true)}
+      />
+      <TrackDatePicker
+        availableTracks={availableTracks}
+        selectedTrack={selectedTrack}
+        selectedDate={selectedDate}
+        onTrackChange={setSelectedTrack}
+        onDateChange={setSelectedDate}
+        isOpen={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+      />
+    </>
   );
 }
 
@@ -171,16 +137,7 @@ function GameContent() {
           <div className="flex items-center gap-3">
             {currentView === 'home' && <StackingIndicator />}
             
-            {currentView === 'home' && (
-              <>
-                <div className="hidden md:block text-right">
-                  <div className="text-xs text-muted uppercase tracking-wider">Track</div>
-                  <div className="font-semibold text-primary">Aqueduct</div>
-                </div>
-                
-                <DateSelector />
-              </>
-            )}
+            {currentView === 'home' && <TrackDateSelector />}
             
             {/* Bankroll */}
             <div className="flex items-center gap-1.5 px-3 py-2 bg-accent/10 rounded-lg">

@@ -20,6 +20,8 @@ import {
   calculateActualPoints,
   calculateLineupStatsWithStacking,
   getAvailableDates,
+  getAvailableTracks,
+  AVAILABLE_TRACKS,
 } from '@/lib/parseExcel';
 import { calculateTargets, determineAchievedTier } from '@/lib/oddsStatistics';
 
@@ -51,7 +53,10 @@ interface GameContextType {
   oddsBucketStats: Map<string, OddsBucketStats>;
   isLoading: boolean;
   
-  // Date selection
+  // Track & Date selection
+  selectedTrack: string;
+  setSelectedTrack: (track: string) => void;
+  availableTracks: { code: string; name: string; dates: string[] }[];
   selectedDate: string;
   setSelectedDate: (date: string) => void;
   availableDates: AvailableDate[];
@@ -122,8 +127,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [oddsBucketStats, setOddsBucketStats] = useState<Map<string, OddsBucketStats>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   
-  // Date selection
-  const [selectedDate, setSelectedDateState] = useState('2025-12-12');
+  // Track & Date selection
+  const [selectedTrack, setSelectedTrackState] = useState('AQU');
+  const [availableTracks, setAvailableTracksState] = useState<{ code: string; name: string; dates: string[] }[]>([]);
+  const [selectedDate, setSelectedDateState] = useState('2025-01-01');
   const [availableDates, setAvailableDates] = useState<AvailableDate[]>([]);
   
   // Theme
@@ -176,25 +183,44 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     }
   }, [theme]);
   
-  // Load available dates on mount
+  // Load available tracks on mount
+  useEffect(() => {
+    const loadTracks = async () => {
+      try {
+        const tracks = await getAvailableTracks();
+        setAvailableTracksState(tracks);
+        
+        // Set initial date to first available date of default track
+        const defaultTrack = tracks.find(t => t.code === 'AQU') || tracks[0];
+        if (defaultTrack && defaultTrack.dates.length > 0) {
+          setSelectedDateState(defaultTrack.dates[0]);
+        }
+      } catch (error) {
+        console.error('Failed to load available tracks:', error);
+      }
+    };
+    loadTracks();
+  }, []);
+  
+  // Load available dates when track changes
   useEffect(() => {
     const loadDates = async () => {
       try {
-        const dates = await getAvailableDates();
+        const dates = await getAvailableDates(selectedTrack);
         setAvailableDates(dates);
       } catch (error) {
         console.error('Failed to load available dates:', error);
       }
     };
     loadDates();
-  }, []);
+  }, [selectedTrack]);
   
-  // Load data for selected date
+  // Load data for selected date and track
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        const data = await getDataForDate(selectedDate);
+        const data = await getDataForDate(selectedDate, selectedTrack);
         setRaces(data.races);
         setConnections(data.connections);
         setHorses(data.horses);
@@ -205,8 +231,24 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false);
       }
     };
-    loadData();
-  }, [selectedDate]);
+    if (selectedDate) {
+      loadData();
+    }
+  }, [selectedDate, selectedTrack]);
+  
+  const setSelectedTrack = useCallback((track: string) => {
+    setSelectedTrackState(track);
+    // Clear picks when changing track
+    setPicks([]);
+    setStake(STAKE_MIN);
+    setFilterState({ selectedPlayers: [], selectedHorses: [] });
+    
+    // Set to first available date for the new track
+    const trackData = availableTracks.find(t => t.code === track);
+    if (trackData && trackData.dates.length > 0) {
+      setSelectedDateState(trackData.dates[0]);
+    }
+  }, [availableTracks]);
   
   const setSelectedDate = useCallback((date: string) => {
     setSelectedDateState(date);
@@ -415,6 +457,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         horses,
         oddsBucketStats,
         isLoading,
+        selectedTrack,
+        setSelectedTrack,
+        availableTracks,
         selectedDate,
         setSelectedDate,
         availableDates,
