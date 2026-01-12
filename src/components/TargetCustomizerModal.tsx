@@ -19,6 +19,7 @@ interface SliderProps {
   minAllowed: number;
   maxAllowed: number;
   tailProb: number;
+  exclusiveProb: number; // Probability of hitting EXACTLY this tier
   onMultiplierChange: (index: number, newMultiplier: number) => void;
   onToggle: (index: number) => void;
   canDisable: boolean;
@@ -31,6 +32,7 @@ function CompactSlider({
   minAllowed,
   maxAllowed,
   tailProb,
+  exclusiveProb,
   onMultiplierChange,
   onToggle,
   canDisable,
@@ -155,10 +157,12 @@ function CompactSlider({
         />
       </div>
       
-      {/* Hit Probability */}
-      <span className="text-sm text-text-muted w-14 text-right flex-shrink-0 tabular-nums">
-        {isEnabled ? `${(tailProb * 100).toFixed(0)}%` : '—'}
-      </span>
+      {/* Hit Probability (exclusive - chance of hitting EXACTLY this tier) */}
+      <div className="w-16 text-right flex-shrink-0">
+        <span className="text-sm tabular-nums font-medium" style={{ color: isEnabled ? getMultiplierColor(multiplier) : '#64748b' }}>
+          {isEnabled ? `${(exclusiveProb * 100).toFixed(0)}%` : '—'}
+        </span>
+      </div>
     </div>
   );
 }
@@ -209,6 +213,20 @@ export function TargetCustomizerModal({ isOpen, onClose }: TargetCustomizerModal
   const activeMultipliers = localMultipliers.filter((_, i) => localEnabled.has(i));
   const zValuesData = computeDynamicZValues(activeMultipliers);
   
+  // Calculate exclusive probabilities (chance of hitting EXACTLY this tier)
+  // Sort by multiplier for proper calculation
+  const sortedZData = [...zValuesData].sort((a, b) => a.multiplier - b.multiplier);
+  const exclusiveProbsMap = new Map<number, number>();
+  sortedZData.forEach((d, i) => {
+    if (i === sortedZData.length - 1) {
+      // Highest tier: exclusive prob = tail prob
+      exclusiveProbsMap.set(d.multiplier, d.tailProb);
+    } else {
+      // Lower tiers: exclusive prob = tail prob - next tier's tail prob
+      exclusiveProbsMap.set(d.multiplier, d.tailProb - sortedZData[i + 1].tailProb);
+    }
+  });
+  
   const previewTargets = localMultipliers.map((mult, i) => {
     const isEnabled = localEnabled.has(i);
     if (!isEnabled) {
@@ -245,6 +263,16 @@ export function TargetCustomizerModal({ isOpen, onClose }: TargetCustomizerModal
       payout: 0,
     }))
   ) : 0;
+  
+  // Build breakdown for display
+  const mathBreakdown = sortedZData.map(d => {
+    const excl = exclusiveProbsMap.get(d.multiplier) || 0;
+    return {
+      multiplier: d.multiplier,
+      exclusiveProb: excl,
+      contribution: d.multiplier * excl,
+    };
+  });
   
   const handleMultiplierChange = (index: number, newMultiplier: number) => {
     const newMultipliers = [...localMultipliers];
@@ -366,10 +394,19 @@ export function TargetCustomizerModal({ isOpen, onClose }: TargetCustomizerModal
             </button>
           </div>
           
+          {/* Column headers */}
+          <div className="grid grid-cols-12 gap-2 text-[10px] text-text-muted uppercase tracking-wider mb-2">
+            <div className="col-span-1"></div>
+            <div className="col-span-2">Tier</div>
+            <div className="col-span-7">Adjust</div>
+            <div className="col-span-2 text-right">Win %</div>
+          </div>
+          
           <div className="space-y-1 divide-y divide-border/50">
             {sortedSliders.map(({ index, multiplier, isEnabled }) => {
               const bounds = getSliderBounds(index);
               const data = zValuesData.find(d => Math.abs(d.multiplier - multiplier) < 0.001);
+              const exclusiveProb = exclusiveProbsMap.get(multiplier) || 0;
               
               return (
                 <CompactSlider
@@ -380,6 +417,7 @@ export function TargetCustomizerModal({ isOpen, onClose }: TargetCustomizerModal
                   minAllowed={bounds.min}
                   maxAllowed={bounds.max}
                   tailProb={data?.tailProb || 0}
+                  exclusiveProb={exclusiveProb}
                   onMultiplierChange={handleMultiplierChange}
                   onToggle={handleToggle}
                   canDisable={localEnabled.size > 1}
@@ -389,8 +427,30 @@ export function TargetCustomizerModal({ isOpen, onClose }: TargetCustomizerModal
           </div>
         </div>
         
-        {/* Expected Return */}
+        {/* Expected Return with Math Breakdown */}
         <div className="px-6 py-4 border-t border-border bg-surface-elevated/30">
+          {/* Math breakdown: multiplier × exclusive probability */}
+          {mathBreakdown.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">Expected Value Calculation</p>
+              <div className="flex flex-wrap items-center gap-1 text-xs">
+                {mathBreakdown.map((item, i) => (
+                  <React.Fragment key={item.multiplier}>
+                    <span 
+                      className="font-mono px-1.5 py-0.5 rounded" 
+                      style={{ backgroundColor: `${getMultiplierColor(item.multiplier)}20`, color: getMultiplierColor(item.multiplier) }}
+                    >
+                      {item.multiplier}x × {(item.exclusiveProb * 100).toFixed(0)}%
+                    </span>
+                    {i < mathBreakdown.length - 1 && <span className="text-text-muted">+</span>}
+                  </React.Fragment>
+                ))}
+                <span className="text-text-muted">=</span>
+                <span className="font-bold text-accent">{(expectedReturn * 100).toFixed(0)}%</span>
+              </div>
+            </div>
+          )}
+          
           <div className="flex items-center justify-between">
             <span className="text-sm text-text-muted">Expected Return to Player</span>
             <div className="flex items-center gap-3">

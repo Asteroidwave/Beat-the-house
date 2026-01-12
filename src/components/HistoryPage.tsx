@@ -35,8 +35,33 @@ function HistoryEntryCard({ entry, index }: HistoryEntryCardProps) {
     });
   };
   
+  // Calculate totals
+  const totalApps = entry.picks.reduce((sum, p) => sum + p.connection.apps, 0);
+  const totalSalary = entry.picks.reduce((sum, p) => sum + p.connection.salary, 0);
+  const totalExpected = entry.lineupStats.muSmooth;
+  const totalActual = entry.actualPoints;
+  const totalDiff = totalActual - totalExpected;
+  
+  // Calculate average odds
+  const avgOdds = entry.picks.length > 0 
+    ? entry.picks.reduce((sum, p) => sum + p.connection.avgOdds, 0) / entry.picks.length 
+    : 0;
+  
+  // Determine total color
+  const getTotalColor = () => {
+    if (totalDiff > 0.5) return 'text-success';
+    if (totalDiff < -0.5) return 'text-error';
+    return 'text-accent';
+  };
+  
   return (
-    <div className={`panel overflow-hidden ${index === 0 ? 'ring-2 ring-accent/30' : ''}`}>
+    <div className={`panel overflow-hidden ${
+      index === 0 ? 'ring-2 ring-accent/30' : ''
+    } ${
+      entry.isWin 
+        ? 'border-l-4 border-l-success' 
+        : 'border-l-4 border-l-error'
+    }`}>
       {/* Header - Always visible */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
@@ -57,10 +82,10 @@ function HistoryEntryCard({ entry, index }: HistoryEntryCardProps) {
             <span className="font-bold text-text-primary">
               {entry.picks.length} picks
             </span>
-            <span className={`text-sm font-medium ${
+            <span className={`text-sm font-bold ${
               entry.isWin ? 'text-success' : 'text-error'
             }`}>
-              {entry.achievedTier ? `HIT ${entry.achievedTier.label}!` : 'MISSED'}
+              {entry.achievedTier ? `HIT ${entry.achievedTier.label}!` : 'MISSED!'}
             </span>
           </div>
           <div className="text-xs text-text-muted">
@@ -127,7 +152,7 @@ function HistoryEntryCard({ entry, index }: HistoryEntryCardProps) {
               <div className="col-span-1 text-center">Apps</div>
               <div className="col-span-2 text-center">Odds</div>
               <div className="col-span-2 text-center">Salary</div>
-              <div className="col-span-1 text-center">μ</div>
+              <div className="col-span-1 text-center">Expected</div>
               <div className="col-span-2 text-center">Actual</div>
             </div>
             
@@ -138,7 +163,7 @@ function HistoryEntryCard({ entry, index }: HistoryEntryCardProps) {
                 const actual = pick.actualPoints ?? 0;
                 const diff = actual - expected;
                 const performanceColor = diff > 0.5 ? 'text-success' : diff < -0.5 ? 'text-error' : 'text-accent';
-                const bgColor = diff > 0.5 ? 'bg-success/10' : diff < -0.5 ? 'bg-error/10' : '';
+                const bgColor = diff > 0.5 ? 'bg-success/5' : diff < -0.5 ? 'bg-error/5' : '';
                 
                 return (
                   <div key={pick.connection.id} className={`px-4 py-2 grid grid-cols-12 gap-1 items-center ${bgColor}`}>
@@ -167,7 +192,7 @@ function HistoryEntryCard({ entry, index }: HistoryEntryCardProps) {
                       ${pick.connection.salary.toLocaleString()}
                     </div>
                     
-                    {/* μ (Expected) */}
+                    {/* Expected */}
                     <div className="col-span-1 text-center text-xs text-text-muted">
                       {expected.toFixed(0)}
                     </div>
@@ -190,27 +215,31 @@ function HistoryEntryCard({ entry, index }: HistoryEntryCardProps) {
               })}
             </div>
             
-            {/* Totals Row */}
-            <div className="px-4 py-2 bg-surface-elevated/50 grid grid-cols-12 gap-1 items-center border-t border-border">
+            {/* Totals Row - Bolder styling */}
+            <div className="px-4 py-2 bg-surface-elevated grid grid-cols-12 gap-1 items-center border-t-2 border-border">
               <div className="col-span-4 text-sm font-bold text-text-primary">TOTAL</div>
-              <div className="col-span-1 text-center text-xs text-text-muted">
-                {entry.picks.reduce((sum, p) => sum + p.connection.apps, 0)}
+              <div className="col-span-1 text-center text-sm font-semibold text-text-secondary">
+                {totalApps}
               </div>
-              <div className="col-span-2 text-center text-xs text-text-muted">—</div>
-              <div className="col-span-2 text-center text-xs font-medium text-text-secondary">
-                ${entry.picks.reduce((sum, p) => sum + p.connection.salary, 0).toLocaleString()}
+              <div className="col-span-2 text-center text-sm font-semibold text-text-secondary">
+                {avgOdds.toFixed(1)}
               </div>
-              <div className="col-span-1 text-center text-xs text-text-muted">
-                {entry.lineupStats.muSmooth.toFixed(0)}
+              <div className="col-span-2 text-center text-sm font-semibold text-text-primary">
+                ${totalSalary.toLocaleString()}
+              </div>
+              <div className="col-span-1 text-center text-sm font-semibold text-text-secondary">
+                {totalExpected.toFixed(0)}
               </div>
               <div className="col-span-2 flex items-center justify-center gap-1">
-                <span className={`text-sm font-bold ${entry.isWin ? 'text-success' : 'text-error'}`}>
-                  {entry.actualPoints.toFixed(0)}
+                <span className={`text-base font-bold ${getTotalColor()}`}>
+                  {totalActual.toFixed(0)}
                 </span>
-                <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${
-                  entry.actualPoints >= entry.lineupStats.muSmooth ? 'bg-success/20 text-success' : 'bg-error/20 text-error'
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                  totalDiff > 0.5 ? 'bg-success/20 text-success' : 
+                  totalDiff < -0.5 ? 'bg-error/20 text-error' : 
+                  'bg-accent/20 text-accent'
                 }`}>
-                  {entry.actualPoints >= entry.lineupStats.muSmooth ? '+' : ''}{(entry.actualPoints - entry.lineupStats.muSmooth).toFixed(0)}
+                  {totalDiff >= 0 ? '+' : ''}{totalDiff.toFixed(0)}
                 </span>
               </div>
             </div>
@@ -311,5 +340,3 @@ export function HistoryPage({ onGoHome }: HistoryPageProps) {
     </div>
   );
 }
-
-

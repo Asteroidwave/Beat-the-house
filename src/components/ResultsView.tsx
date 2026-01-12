@@ -32,6 +32,25 @@ export function ResultsView({ onGoHome }: ResultsViewProps) {
   };
 
   if (!gameResult) return null;
+  
+  // Calculate totals
+  const totalApps = gameResult.picks.reduce((sum, p) => sum + p.connection.apps, 0);
+  const totalSalary = gameResult.picks.reduce((sum, p) => sum + p.connection.salary, 0);
+  const totalExpected = gameResult.lineupStats.muSmooth;
+  const totalActual = gameResult.actualPoints;
+  const totalDiff = totalActual - totalExpected;
+  
+  // Calculate average odds
+  const avgOdds = gameResult.picks.length > 0 
+    ? gameResult.picks.reduce((sum, p) => sum + p.connection.avgOdds, 0) / gameResult.picks.length 
+    : 0;
+  
+  // Determine total color: green if above expected, red if below, blue if equal (within 0.5)
+  const getTotalColor = () => {
+    if (totalDiff > 0.5) return 'text-success';
+    if (totalDiff < -0.5) return 'text-error';
+    return 'text-accent';
+  };
 
   return (
     <div className="min-h-screen bg-background p-4 lg:p-6">
@@ -164,7 +183,7 @@ export function ResultsView({ onGoHome }: ResultsViewProps) {
             <div className="col-span-1 text-center">Apps</div>
             <div className="col-span-2 text-center">Odds</div>
             <div className="col-span-2 text-center">Salary</div>
-            <div className="col-span-1 text-center">μ</div>
+            <div className="col-span-1 text-center">Expected</div>
             <div className="col-span-2 text-center">Actual</div>
           </div>
           
@@ -174,7 +193,7 @@ export function ResultsView({ onGoHome }: ResultsViewProps) {
               const expected = pick.connection.muSmooth || 0;
               const diff = actual - expected;
               const performanceColor = diff > 0.5 ? 'text-success' : diff < -0.5 ? 'text-error' : 'text-accent';
-              const bgColor = diff > 0.5 ? 'bg-success/10' : diff < -0.5 ? 'bg-error/10' : '';
+              const bgColor = diff > 0.5 ? 'bg-success/5' : diff < -0.5 ? 'bg-error/5' : '';
               const colors = roleColors[pick.connection.role];
               
               return (
@@ -204,7 +223,7 @@ export function ResultsView({ onGoHome }: ResultsViewProps) {
                     ${pick.connection.salary.toLocaleString()}
                   </div>
                   
-                  {/* μ (Expected) */}
+                  {/* Expected */}
                   <div className="col-span-1 text-center text-xs text-text-muted">
                     {expected.toFixed(0)}
                   </div>
@@ -227,27 +246,31 @@ export function ResultsView({ onGoHome }: ResultsViewProps) {
             })}
           </div>
           
-          {/* Totals Row */}
-          <div className="px-4 py-3 bg-surface-elevated/50 grid grid-cols-12 gap-1 items-center border-t border-border">
-            <div className="col-span-4 font-bold text-text-primary">TOTAL</div>
-            <div className="col-span-1 text-center text-xs text-text-muted">
-              {gameResult.picks.reduce((sum, p) => sum + p.connection.apps, 0)}
+          {/* Totals Row - Bolder styling */}
+          <div className="px-4 py-3 bg-surface-elevated grid grid-cols-12 gap-1 items-center border-t-2 border-border">
+            <div className="col-span-4 text-sm font-bold text-text-primary">TOTAL</div>
+            <div className="col-span-1 text-center text-sm font-semibold text-text-secondary">
+              {totalApps}
             </div>
-            <div className="col-span-2 text-center text-xs text-text-muted">—</div>
-            <div className="col-span-2 text-center text-xs font-medium text-text-secondary">
-              ${gameResult.picks.reduce((sum, p) => sum + p.connection.salary, 0).toLocaleString()}
+            <div className="col-span-2 text-center text-sm font-semibold text-text-secondary">
+              {avgOdds.toFixed(1)}
             </div>
-            <div className="col-span-1 text-center text-xs text-text-muted">
-              {gameResult.lineupStats.muSmooth.toFixed(0)}
+            <div className="col-span-2 text-center text-sm font-semibold text-text-primary">
+              ${totalSalary.toLocaleString()}
+            </div>
+            <div className="col-span-1 text-center text-sm font-semibold text-text-secondary">
+              {totalExpected.toFixed(0)}
             </div>
             <div className="col-span-2 flex items-center justify-center gap-1">
-              <span className={`text-sm font-bold ${gameResult.isWin ? 'text-success' : 'text-error'}`}>
-                {gameResult.actualPoints.toFixed(0)}
+              <span className={`text-base font-bold ${getTotalColor()}`}>
+                {totalActual.toFixed(0)}
               </span>
-              <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${
-                gameResult.actualPoints >= gameResult.lineupStats.muSmooth ? 'bg-success/20 text-success' : 'bg-error/20 text-error'
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                totalDiff > 0.5 ? 'bg-success/20 text-success' : 
+                totalDiff < -0.5 ? 'bg-error/20 text-error' : 
+                'bg-accent/20 text-accent'
               }`}>
-                {gameResult.actualPoints >= gameResult.lineupStats.muSmooth ? '+' : ''}{(gameResult.actualPoints - gameResult.lineupStats.muSmooth).toFixed(0)}
+                {totalDiff >= 0 ? '+' : ''}{totalDiff.toFixed(0)}
               </span>
             </div>
           </div>
@@ -262,7 +285,16 @@ export function ResultsView({ onGoHome }: ResultsViewProps) {
             </div>
             <div className="max-h-60 overflow-y-auto divide-y divide-border">
               {gameHistory.slice(0, 10).map((entry, index) => (
-                <div key={entry.id} className={`px-4 py-3 flex items-center gap-3 ${index === 0 ? 'bg-accent/5' : ''}`}>
+                <div 
+                  key={entry.id} 
+                  className={`px-4 py-3 flex items-center gap-3 ${
+                    index === 0 ? 'bg-accent/5' : ''
+                  } ${
+                    entry.isWin 
+                      ? 'border-l-4 border-l-success' 
+                      : 'border-l-4 border-l-error'
+                  }`}
+                >
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                     entry.isWin ? 'bg-success/20' : 'bg-error/20'
                   }`}>
@@ -274,7 +306,10 @@ export function ResultsView({ onGoHome }: ResultsViewProps) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-text-primary">
-                      {entry.picks.length} picks • {entry.achievedTier?.label || 'No hit'}
+                      {entry.picks.length} picks • 
+                      <span className={entry.isWin ? 'text-success' : 'text-error'}>
+                        {entry.achievedTier ? ` HIT ${entry.achievedTier.label}!` : ' MISSED!'}
+                      </span>
                     </p>
                     <p className="text-xs text-text-muted">
                       {entry.actualPoints.toFixed(0)} pts (μ: {entry.lineupStats.muSmooth.toFixed(0)})
