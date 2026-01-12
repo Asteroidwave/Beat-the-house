@@ -215,6 +215,7 @@ export function PicksPanel() {
           <TargetProgressBar
             targets={targets}
             isActive={isAboveMin}
+            animatePositions={true}
           />
         </div>
         

@@ -119,6 +119,7 @@ function HistoryEntryCard({ entry, index }: HistoryEntryCardProps) {
               actualPoints={entry.actualPoints}
               showResults={true}
               isActive={true}
+              animatePositions={true}
             />
           </div>
           

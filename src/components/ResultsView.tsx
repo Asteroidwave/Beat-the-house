@@ -55,11 +55,11 @@ export function ResultsView({ onGoHome }: ResultsViewProps) {
   return (
     <div className="min-h-screen bg-background p-4 lg:p-6">
       <div className="max-w-4xl mx-auto">
-        {/* Main Result Card */}
+        {/* Main Result Card - Green border for WIN, Red border for MISS */}
         <div className={`rounded-2xl p-6 mb-6 ${
           gameResult.isWin 
-            ? 'bg-gradient-to-br from-success/20 to-success/5 border border-success/30' 
-            : 'bg-gradient-to-br from-error/20 to-error/5 border border-error/30'
+            ? 'bg-gradient-to-br from-success/20 to-success/5 border-2 border-success shadow-lg shadow-success/20' 
+            : 'bg-gradient-to-br from-error/20 to-error/5 border-2 border-error shadow-lg shadow-error/20'
         }`}>
           <div className="flex items-center justify-center gap-3 mb-4">
             {gameResult.isWin ? (
@@ -96,6 +96,7 @@ export function ResultsView({ onGoHome }: ResultsViewProps) {
               actualPoints={gameResult.actualPoints}
               showResults={true}
               isActive={true}
+              animatePositions={true}
             />
           </div>
           
