@@ -132,6 +132,7 @@ export interface TargetThreshold {
   label: string;
   color: string;
   zValue: number;        // z-score for this tier
+  tailProb?: number;     // Probability of hitting this tier or higher
   targetPoints: number;  // Calculated: μ + z*σ
   payout: number;        // stake * multiplier
 }

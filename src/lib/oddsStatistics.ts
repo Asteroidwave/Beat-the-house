@@ -263,43 +263,130 @@ export function getHorseStats(
   };
 }
 
+// ============================================================================
+// DYNAMIC Z-VALUE CALCULATION (Power-Law Formula)
+// ============================================================================
+// This implements ChatGPT's correct formula for computing z-values that
+// guarantee a specific expected return (e.g., 80% to players, 20% house edge)
+//
+// The formula:
+//   1. c = (1 - houseTake) / Σ[(mᵢ - mᵢ₋₁) / mᵢ^α]
+//   2. qᵢ = c / mᵢ^α  (tail probability for tier i)
+//   3. zᵢ = Φ⁻¹(1 - qᵢ) (inverse normal CDF)
+//   4. Threshold_i = μ + zᵢ · σ
+//
+// This ensures the expected payout is exactly (1 - houseTake).
+// ============================================================================
+
 /**
- * Calibrated z-values for standard multipliers (from 50k+ lineup simulations)
- * These are calibrated for 80% total player return (20% house edge)
+ * Inverse normal CDF (standard normal quantile function)
+ * Approximation using Abramowitz and Stegun formula 26.2.23
  */
-export const CALIBRATED_Z_VALUES: Record<string, number> = {
-  '0.5': 3.15,   // 75.7% hit rate
-  '1': 4.00,    // ~50% hit rate
-  '1.5': 4.70,  // ~35% hit rate
-  '2': 5.35,    // 20.1% hit rate
-  '2.5': 5.70,  // ~16% hit rate
-  '3': 6.00,    // 11.9% hit rate
-  '4': 6.80,    // ~7% hit rate
-  '5': 7.50,    // ~4% hit rate
-  '7': 8.50,    // ~2% hit rate
-  '10': 10.00,  // ~0.5% hit rate
-  '15': 11.90,  // ~0.1% hit rate
+function normsinv(p: number): number {
+  if (p <= 0) return -Infinity;
+  if (p >= 1) return Infinity;
+  if (p === 0.5) return 0;
+
+  const a1 = -39.6968302866538;
+  const a2 = 220.946098424521;
+  const a3 = -275.928510446969;
+  const a4 = 138.357751867269;
+  const a5 = -30.6647980661472;
+  const a6 = 2.50662823884;
+  const b1 = -54.4760987982241;
+  const b2 = 161.585836858041;
+  const b3 = -155.698979859887;
+  const b4 = 66.8013118877197;
+  const b5 = -13.2806815528857;
+  const c1 = -7.78489400243029e-3;
+  const c2 = -0.322396458041136;
+  const c3 = -2.40075827716184;
+  const c4 = -2.54973253934373;
+  const c5 = 4.37466414146497;
+  const c6 = 2.93816398269878;
+  const d1 = 7.78469570904146e-3;
+  const d2 = 0.32246712907004;
+  const d3 = 2.445134137143;
+  const d4 = 3.75440866190742;
+  const pLow = 0.02425;
+  const pHigh = 1 - pLow;
+
+  let q: number;
+  let r: number;
+
+  if (p < pLow) {
+    q = Math.sqrt(-2 * Math.log(p));
+    return (((((c1 * q + c2) * q + c3) * q + c4) * q + c5) * q + c6) /
+           ((((d1 * q + d2) * q + d3) * q + d4) * q + 1);
+  } else if (p <= pHigh) {
+    q = p - 0.5;
+    r = q * q;
+    return (((((a1 * r + a2) * r + a3) * r + a4) * r + a5) * r + a6) * q /
+           (((((b1 * r + b2) * r + b3) * r + b4) * r + b5) * r + 1);
+  } else {
+    q = Math.sqrt(-2 * Math.log(1 - p));
+    return -(((((c1 * q + c2) * q + c3) * q + c4) * q + c5) * q + c6) /
+            ((((d1 * q + d2) * q + d3) * q + d4) * q + 1);
+  }
+}
+
+/**
+ * Configuration for z-value calculation
+ */
+export interface ZValueConfig {
+  houseTake: number;  // e.g., 0.20 for 20% house edge
+  alpha: number;      // Power-law shape parameter (1.0 is a good default)
+}
+
+export const DEFAULT_Z_CONFIG: ZValueConfig = {
+  houseTake: 0.20,  // 20% house edge = 80% return to players
+  alpha: 1.0,       // Linear power-law (higher = harder high multipliers)
 };
 
 /**
- * Get z-value for any multiplier via interpolation
+ * Compute dynamic z-values for any set of multipliers using the power-law formula.
+ * 
+ * This ensures the expected payout equals (1 - houseTake) regardless of which
+ * multipliers are active or their exact values.
+ * 
+ * @param multipliers - Array of multiplier values (e.g., [0.5, 2, 3, 5])
+ * @param config - Configuration with houseTake and alpha
+ * @returns Array of { multiplier, tailProb, zValue } for each tier
  */
-export function getZFromMultiplier(multiplier: number): number {
-  const calibration = Object.entries(CALIBRATED_Z_VALUES)
-    .map(([mult, z]) => ({ mult: parseFloat(mult), z }))
-    .sort((a, b) => a.mult - b.mult);
+export function computeDynamicZValues(
+  multipliers: number[],
+  config: ZValueConfig = DEFAULT_Z_CONFIG
+): { multiplier: number; tailProb: number; zValue: number }[] {
+  // Sort multipliers low to high
+  const sorted = [...multipliers].sort((a, b) => a - b);
   
-  // Linear interpolation between calibration points
-  for (let i = 0; i < calibration.length - 1; i++) {
-    if (multiplier >= calibration[i].mult && multiplier <= calibration[i + 1].mult) {
-      const ratio = (multiplier - calibration[i].mult) / (calibration[i + 1].mult - calibration[i].mult);
-      return calibration[i].z + ratio * (calibration[i + 1].z - calibration[i].z);
-    }
+  if (sorted.length === 0) {
+    return [];
   }
   
-  // Extrapolate for out-of-range values
-  if (multiplier < calibration[0].mult) return calibration[0].z;
-  return calibration[calibration.length - 1].z;
+  const { houseTake, alpha } = config;
+  
+  // Compute deltas: m_i - m_{i-1} (with m_0 = 0)
+  const deltas = sorted.map((m, i) => i === 0 ? m : m - sorted[i - 1]);
+  
+  // Compute denominator: Σ[(mᵢ - mᵢ₋₁) / mᵢ^α]
+  const denominator = sorted.reduce((sum, m, i) => {
+    return sum + deltas[i] / Math.pow(m, alpha);
+  }, 0);
+  
+  // Compute scaling constant c
+  const c = (1 - houseTake) / denominator;
+  
+  // Compute tail probabilities and z-values for each tier
+  return sorted.map(m => {
+    const tailProb = c / Math.pow(m, alpha);
+    const zValue = normsinv(1 - tailProb);
+    return {
+      multiplier: m,
+      tailProb,
+      zValue,
+    };
+  });
 }
 
 /**
@@ -315,35 +402,58 @@ export function getMultiplierColor(mult: number): string {
 }
 
 /**
- * Calculate target points for given multipliers, μ and σ
+ * Target information for a single tier
+ */
+export interface TargetTier {
+  multiplier: number;
+  label: string;
+  color: string;
+  zValue: number;
+  tailProb: number;      // Probability of hitting this tier or higher
+  targetPoints: number;  // μ + z·σ
+  payout: number;        // stake * multiplier
+}
+
+/**
+ * Calculate target points for given multipliers, μ, σ, and stake.
+ * Uses dynamic z-value calculation to ensure correct expected return.
+ * 
+ * @param mu - Lineup expected value (μ)
+ * @param sigma - Lineup standard deviation (σ)
+ * @param stake - Player's stake amount
+ * @param multipliers - Active multiplier values
+ * @param config - Z-value configuration (house take, alpha)
+ * @returns Array of TargetTier objects sorted by multiplier (low to high)
  */
 export function calculateTargets(
   mu: number,
   sigma: number,
   stake: number,
-  multipliers: number[] = [0.5, 2, 3, 5]
-): { multiplier: number; label: string; zValue: number; targetPoints: number; payout: number; color: string }[] {
-  return multipliers.map(mult => {
-    const zValue = getZFromMultiplier(mult);
-    return {
-      multiplier: mult,
-      label: `${mult}x`,
-      color: getMultiplierColor(mult),
-      zValue,
-      targetPoints: mu + zValue * sigma,
-      payout: stake * mult,
-    };
-  });
+  multipliers: number[] = [0.5, 2, 3, 5],
+  config: ZValueConfig = DEFAULT_Z_CONFIG
+): TargetTier[] {
+  const zValues = computeDynamicZValues(multipliers, config);
+  
+  return zValues.map(({ multiplier, tailProb, zValue }) => ({
+    multiplier,
+    label: `${multiplier}x`,
+    color: getMultiplierColor(multiplier),
+    zValue,
+    tailProb,
+    targetPoints: mu + zValue * sigma,
+    payout: stake * multiplier,
+  }));
 }
 
 /**
  * Determine which tier was achieved based on actual points
+ * Accepts either TargetTier or TargetThreshold (from types)
  */
-export function determineAchievedTier(
+export function determineAchievedTier<T extends { multiplier: number; targetPoints: number }>(
   actualPoints: number,
-  targets: { multiplier: number; label: string; targetPoints: number; payout: number; color: string; zValue: number }[]
-): { multiplier: number; label: string; targetPoints: number; payout: number; color: string; zValue: number } | null {
-  // Check from highest to lowest
+  targets: T[]
+): T | null {
+  // Check from highest to lowest multiplier
   const sortedTargets = [...targets].sort((a, b) => b.multiplier - a.multiplier);
   
   for (const target of sortedTargets) {
@@ -353,4 +463,50 @@ export function determineAchievedTier(
   }
   
   return null; // Didn't hit any target
+}
+
+/**
+ * Calculate expected return for a given set of targets
+ * This can be used to verify the math is correct
+ * 
+ * @param targets - Array of TargetTier objects
+ * @returns Expected return as a fraction (e.g., 0.80 for 80%)
+ */
+export function calculateExpectedReturn(targets: TargetTier[]): number {
+  const sorted = [...targets].sort((a, b) => a.multiplier - b.multiplier);
+  
+  // Calculate marginal probabilities (prob of hitting exactly this tier)
+  const marginalProbs = sorted.map((t, i) => {
+    if (i === sorted.length - 1) {
+      return t.tailProb; // Highest tier: P(exact) = P(≥ this tier)
+    }
+    return t.tailProb - sorted[i + 1].tailProb;
+  });
+  
+  // Expected payout = Σ(multiplier × marginal probability)
+  return sorted.reduce((sum, t, i) => sum + t.multiplier * marginalProbs[i], 0);
+}
+
+/**
+ * Debug function to print z-value calculation details
+ */
+export function debugZValues(
+  multipliers: number[],
+  config: ZValueConfig = DEFAULT_Z_CONFIG
+): void {
+  const targets = calculateTargets(0, 1, 1, multipliers, config); // μ=0, σ=1, stake=1 for simplicity
+  const expectedReturn = calculateExpectedReturn(targets);
+  
+  console.log('=== Z-Value Calculation Debug ===');
+  console.log('Multipliers:', multipliers);
+  console.log('House Take:', config.houseTake);
+  console.log('Alpha:', config.alpha);
+  console.log('');
+  console.log('Tier Details:');
+  targets.forEach(t => {
+    console.log(`  ${t.label}: z=${t.zValue.toFixed(3)}, P(hit)=${(t.tailProb * 100).toFixed(2)}%`);
+  });
+  console.log('');
+  console.log(`Expected Return: ${(expectedReturn * 100).toFixed(2)}%`);
+  console.log(`House Edge: ${((1 - expectedReturn) * 100).toFixed(2)}%`);
 }

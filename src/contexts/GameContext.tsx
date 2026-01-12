@@ -8,13 +8,11 @@ import {
   GameResult, 
   HorseEntry, 
   RaceInfo, 
-  MultiplierTier, 
   GameHistoryEntry,
   TargetThreshold,
   OddsBucketStats,
   AvailableDate,
   FilterState,
-  ConnectionHighlight,
 } from '@/types';
 import { 
   getDataForDate, 
@@ -40,17 +38,10 @@ const HIGHLIGHT_COLORS = [
   { bg: 'bg-orange-500', light: 'bg-orange-500/20', border: 'border-orange-500', text: 'text-orange-500' },
 ];
 
-// Default multiplier tiers with calibrated z-values for 80% player return
-// Calibrated from 50k+ lineup simulations across 8 tracks (AQU, GP, SA, DMR, PRX, PEN, LRL, MVR)
-export const DEFAULT_MULTIPLIER_TIERS: MultiplierTier[] = [
-  { multiplier: 0.5, threshold: 80, label: '0.5x', color: '#94a3b8', zValue: 3.15 },  // 75.7% hit
-  { multiplier: 2, threshold: 110, label: '2x', color: '#22c55e', zValue: 5.35 },    // 20.1% hit
-  { multiplier: 3, threshold: 130, label: '3x', color: '#3b82f6', zValue: 6.00 },    // 11.9% hit
-  { multiplier: 5, threshold: 160, label: '5x', color: '#a855f7', zValue: 11.90 },   // 0.1% hit
-];
-
-// For backwards compatibility
-export const MULTIPLIER_TIERS = DEFAULT_MULTIPLIER_TIERS;
+// Default multiplier values - z-values are computed dynamically using power-law formula
+// to ensure exactly 80% return to players (20% house edge) for any combination of tiers.
+// Users can customize these via sliders (0.5x to 15x).
+export const DEFAULT_MULTIPLIERS = [0.5, 2, 3, 5];
 
 interface GameContextType {
   // Data
