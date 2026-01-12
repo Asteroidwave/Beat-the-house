@@ -102,10 +102,7 @@ function GameContent() {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
               <span className="text-xl">🏇</span>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-primary tracking-tight">Beat The House</h1>
-              <p className="text-xs text-muted">Salary Cap Fantasy</p>
-            </div>
+            <h1 className="text-xl font-bold text-primary tracking-tight">Beat The House</h1>
           </div>
           
           {/* Navigation Tabs */}
