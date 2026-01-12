@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '@/contexts/GameContext';
 import { TargetProgressBar } from './TargetProgressBar';
-import { TargetSliders } from './TargetSliders';
-import { X, Zap, Users, Trash2, ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
+import { TargetCustomizerModal } from './TargetCustomizerModal';
+import { X, Zap, Users, Trash2, Settings2 } from 'lucide-react';
 
 const roleColors = {
   jockey: { bg: 'bg-blue-500', text: 'text-blue-500' },
@@ -38,8 +38,8 @@ export function PicksPanel() {
   // Local state for stake input to allow empty field
   const [stakeInput, setStakeInput] = useState(stake.toString());
   
-  // State for collapsible target sliders
-  const [showSliders, setShowSliders] = useState(false);
+  // State for target customizer modal
+  const [showCustomizer, setShowCustomizer] = useState(false);
   
   // Sync stakeInput when stake changes externally (e.g., game reset)
   useEffect(() => {
@@ -200,34 +200,29 @@ export function PicksPanel() {
       
       {/* Bottom Section: Targets Progress Bar, Stake, Play */}
       <div className="flex-shrink-0 border-t border-border bg-surface">
-        {/* Target Progress Bar - No label, no μ/σ display */}
+        {/* Target Progress Bar with small customize button */}
         <div className="px-3 py-3 border-b border-border">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-text-muted">Targets</span>
+            <button
+              onClick={() => setShowCustomizer(true)}
+              className="flex items-center gap-1 px-2 py-1 text-[10px] text-text-muted hover:text-accent border border-border/50 hover:border-accent/50 rounded transition-all"
+            >
+              <Settings2 className="w-3 h-3" />
+              Customize
+            </button>
+          </div>
           <TargetProgressBar
             targets={targets}
             isActive={isAboveMin}
           />
-          
-          {/* Customize Targets Button */}
-          <button
-            onClick={() => setShowSliders(!showSliders)}
-            className="mt-2 w-full py-1.5 text-xs text-text-muted hover:text-accent border border-border/50 hover:border-accent/50 rounded-lg transition-all flex items-center justify-center gap-1.5"
-          >
-            <Settings2 className="w-3.5 h-3.5" />
-            Customize Targets
-            {showSliders ? (
-              <ChevronUp className="w-3.5 h-3.5" />
-            ) : (
-              <ChevronDown className="w-3.5 h-3.5" />
-            )}
-          </button>
         </div>
         
-        {/* Collapsible Target Sliders */}
-        {showSliders && (
-          <div className="px-3 py-3 border-b border-border bg-surface-elevated/30">
-            <TargetSliders />
-          </div>
-        )}
+        {/* Target Customizer Modal */}
+        <TargetCustomizerModal
+          isOpen={showCustomizer}
+          onClose={() => setShowCustomizer(false)}
+        />
         
         {/* Stake Input - Text field that allows clearing */}
         <div className="px-3 py-3 border-b border-border">
