@@ -171,7 +171,7 @@ export function PlayersPanel() {
       </div>
 
       {/* Table Header */}
-      <div className="grid grid-cols-[auto_1fr_80px_50px_65px_55px_40px] gap-2 px-3 py-2 text-xs font-medium text-muted uppercase tracking-wider border-b border-border flex-shrink-0">
+      <div className="grid grid-cols-[auto_1fr_90px_55px_70px_60px_40px] gap-3 px-3 py-2 text-xs font-medium text-muted uppercase tracking-wider border-b border-border flex-shrink-0">
         <div></div>
         <button onClick={() => handleSort('name')} className="text-left hover:text-primary">
           Player {sortBy === 'name' && (sortDir === 'asc' ? '↑' : '↓')}
@@ -204,7 +204,7 @@ export function PlayersPanel() {
           return (
             <div
               key={conn.id}
-              className={`grid grid-cols-[auto_1fr_80px_50px_65px_55px_40px] gap-2 px-3 py-3 items-center transition-colors ${
+              className={`grid grid-cols-[auto_1fr_90px_55px_70px_60px_40px] gap-3 px-3 py-3 items-center transition-colors ${
                 isScratched
                   ? 'opacity-40'
                   : isPicked 

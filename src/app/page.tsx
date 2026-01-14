@@ -164,13 +164,13 @@ function GameContent() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-100px)]">
+            <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.2fr_0.9fr] gap-4 h-[calc(100vh-100px)]">
               {/* Starters Panel */}
               <div className="order-2 lg:order-1 overflow-y-auto lg:h-full h-[500px]">
                 <StartersPanel />
               </div>
 
-              {/* Players Panel */}
+              {/* Players Panel - Wider */}
               <div className="order-1 lg:order-2 overflow-y-auto lg:h-full h-[500px]">
                 <PlayersPanel />
               </div>
