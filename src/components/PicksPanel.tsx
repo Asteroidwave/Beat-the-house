@@ -102,7 +102,7 @@ export function PicksPanel() {
         <h2 className="text-lg font-bold text-text-primary">Your Picks</h2>
       </div>
       
-      {/* Compact Stats Row - No μ */}
+      {/* Compact Stats Row */}
       <div className="flex-shrink-0 px-3 py-2 border-b border-border bg-surface-elevated/50">
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-1">
@@ -114,11 +114,38 @@ export function PicksPanel() {
             <span className="font-bold text-text-primary">{lineupStats.totalApps}</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-text-muted">Avg Odds</span>
+            <span className="text-text-muted">Odds</span>
             <span className="font-bold text-text-primary">{lineupStats.avgOdds ? lineupStats.avgOdds.toFixed(1) : '—'}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-text-muted">FP1K</span>
+            <span className={`font-bold ${lineupStats.fp1k >= 10 ? 'text-emerald-500' : lineupStats.fp1k >= 8 ? 'text-text-primary' : 'text-text-muted'}`}>
+              {lineupStats.fp1k > 0 ? lineupStats.fp1k.toFixed(1) : '—'}
+            </span>
           </div>
         </div>
       </div>
+      
+      {/* FP1K Calculator / Estimated Points */}
+      {picks.length > 0 && (
+        <div className="flex-shrink-0 px-3 py-2 border-b border-border">
+          <div className="flex items-center justify-between">
+            <div className="text-xs">
+              <span className="text-text-muted">Est. Points</span>
+              <span className="ml-2 font-bold text-lg text-accent">{lineupStats.estimatedPoints}</span>
+            </div>
+            <div className="text-xs text-right">
+              <span className="text-text-muted">Range</span>
+              <span className="ml-2 font-medium text-text-secondary">
+                {lineupStats.rangeFloor} → {lineupStats.rangeCeiling}
+              </span>
+            </div>
+          </div>
+          <div className="mt-1 text-[10px] text-text-muted">
+            {lineupStats.fp1k.toFixed(1)} × ${(lineupStats.totalSalary / 1000).toFixed(1)}k = {lineupStats.estimatedPoints} pts
+          </div>
+        </div>
+      )}
       
       {/* Salary Progress Bar */}
       <div className="flex-shrink-0 px-3 py-2 border-b border-border">
@@ -182,7 +209,12 @@ export function PicksPanel() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-text-primary truncate">{pick.connection.name}</p>
                     <p className="text-[10px] text-text-muted">
-                      ${pick.connection.salary.toLocaleString()} • {pick.connection.apps} apps • {pick.connection.avgOdds.toFixed(1)} odds
+                      ${pick.connection.salary.toLocaleString()} • {pick.connection.apps} apps • FP1K: {pick.connection.fp1k > 0 ? pick.connection.fp1k.toFixed(1) : '—'}
+                    </p>
+                  </div>
+                  <div className="text-right mr-1">
+                    <p className="text-[10px] text-text-muted">
+                      {pick.connection.fp1kRange.low > 0 ? `${pick.connection.fp1kRange.low}→${pick.connection.fp1kRange.high}` : '—'}
                     </p>
                   </div>
                   <button

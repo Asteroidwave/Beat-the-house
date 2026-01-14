@@ -84,6 +84,14 @@ export interface Connection {
   shows: number;
   winPct: number;
   itmPct: number;
+  // FP1K (Fantasy Points per $1000) - 90 day or yearly
+  fp1k: number;
+  fp1kRange: { low: number; high: number };
+  // Yearly stats (for display)
+  startsYearly: number;
+  winsYearly: number;
+  placesYearly: number;
+  showsYearly: number;
   // Aggregated statistics from horses
   mu: number;
   variance: number;
@@ -113,6 +121,12 @@ export interface LineupStats {
   totalApps: number;
   avgOdds: number;
   expectedPoints: number;
+  // FP1K (Fantasy Points per $1000) for lineup
+  fp1k: number;
+  estimatedPoints: number;
+  // Lineup range (floor to ceiling)
+  rangeFloor: number;
+  rangeCeiling: number;
   // Statistical aggregates
   mu: number;
   variance: number;

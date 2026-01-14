@@ -189,7 +189,7 @@ export async function loadTrackData(trackCode: string): Promise<TrackData> {
     };
   });
   
-  // Build connection maps
+  // Build connection maps with new FP1K fields
   const jockeys = new Map<string, Connection>();
   rawData.jockeys.forEach((row) => {
     const key = `${row.date}-${row.name}`;
@@ -208,6 +208,12 @@ export async function loadTrackData(trackCode: string): Promise<TrackData> {
       shows: row.shows,
       winPct: row.winPct,
       itmPct: row.itmPct,
+      fp1k: 0,
+      fp1kRange: { low: 0, high: 0 },
+      startsYearly: 0,
+      winsYearly: 0,
+      placesYearly: 0,
+      showsYearly: 0,
       mu: 0,
       variance: 0,
       sigma: 0,
@@ -236,6 +242,12 @@ export async function loadTrackData(trackCode: string): Promise<TrackData> {
       shows: row.shows,
       winPct: row.winPct,
       itmPct: row.itmPct,
+      fp1k: 0,
+      fp1kRange: { low: 0, high: 0 },
+      startsYearly: 0,
+      winsYearly: 0,
+      placesYearly: 0,
+      showsYearly: 0,
       mu: 0,
       variance: 0,
       sigma: 0,
@@ -264,6 +276,12 @@ export async function loadTrackData(trackCode: string): Promise<TrackData> {
       shows: row.shows,
       winPct: row.winPct,
       itmPct: row.itmPct,
+      fp1k: 0,
+      fp1kRange: { low: 0, high: 0 },
+      startsYearly: 0,
+      winsYearly: 0,
+      placesYearly: 0,
+      showsYearly: 0,
       mu: 0,
       variance: 0,
       sigma: 0,
@@ -338,6 +356,19 @@ export async function getDataForDate(date: string, trackCode: string = 'AQU') {
     }))
     .sort((a, b) => a.raceNumber - b.raceNumber);
 
+  // Calculate 90-day cutoff date
+  const selectedDate = new Date(date);
+  const cutoffDate90d = new Date(selectedDate);
+  cutoffDate90d.setDate(cutoffDate90d.getDate() - 90);
+  const cutoffStr90d = formatDateLocal(cutoffDate90d);
+
+  // Get all horses within date range for FP1K calculations (excluding selected date)
+  const historicalHorses = data.horses.filter(h => {
+    return h.date < date && !h.isScratched;
+  });
+
+  const horses90d = historicalHorses.filter(h => h.date >= cutoffStr90d);
+
   // Get connections for this date with aggregated μ/σ from horses
   const connections: Connection[] = [];
   const seenConnections = new Set<string>();
@@ -367,17 +398,111 @@ export async function getDataForDate(date: string, trackCode: string = 'AQU') {
     return { mu, variance, sigma, muSmooth, varianceSmooth, sigmaSmooth, horseIds };
   };
 
+  // Helper to calculate FP1K stats from historical horses
+  const calculateFP1KStats = (
+    connectionName: string,
+    role: 'jockey' | 'trainer' | 'sire'
+  ) => {
+    // Filter horses by connection
+    const filterByConnection = (h: HorseEntry) => {
+      if (role === 'jockey') return h.jockey === connectionName;
+      if (role === 'trainer') return h.trainer === connectionName;
+      if (role === 'sire') return h.sire1 === connectionName || h.sire2 === connectionName;
+      return false;
+    };
+
+    // 90-day horses for this connection
+    const connHorses90d = horses90d.filter(filterByConnection);
+    // All historical horses for this connection (yearly fallback)
+    const connHorsesAll = historicalHorses.filter(filterByConnection);
+
+    // Use 90-day data if available (at least 3 horses), otherwise yearly
+    const horsesToUse = connHorses90d.length >= 3 ? connHorses90d : connHorsesAll;
+
+    // Calculate FP1K: Total Points / (Salary / 1000)
+    let fp1k = 0;
+    if (horsesToUse.length > 0) {
+      const totalPoints = horsesToUse.reduce((sum, h) => sum + h.totalPoints, 0);
+      const totalSalary = horsesToUse.reduce((sum, h) => sum + h.salary, 0);
+      if (totalSalary > 0) {
+        fp1k = (totalPoints / totalSalary) * 1000;
+      }
+    }
+
+    // Calculate FP1K range from daily performance
+    // Group horses by date and calculate daily FP1K
+    const dailyFP1K: number[] = [];
+    const dateMap = new Map<string, { points: number; salary: number }>();
+    
+    horsesToUse.forEach(h => {
+      const existing = dateMap.get(h.date) || { points: 0, salary: 0 };
+      existing.points += h.totalPoints;
+      existing.salary += h.salary;
+      dateMap.set(h.date, existing);
+    });
+
+    dateMap.forEach(({ points, salary }) => {
+      if (salary > 0) {
+        dailyFP1K.push((points / salary) * 1000);
+      }
+    });
+
+    // Calculate range with some smoothing (remove outliers)
+    let fp1kRange = { low: 0, high: 0 };
+    if (dailyFP1K.length > 0) {
+      dailyFP1K.sort((a, b) => a - b);
+      // Use 10th and 90th percentile for smoothing if enough data
+      if (dailyFP1K.length >= 5) {
+        const lowIdx = Math.floor(dailyFP1K.length * 0.1);
+        const highIdx = Math.floor(dailyFP1K.length * 0.9);
+        fp1kRange = {
+          low: Math.round(dailyFP1K[lowIdx] * 10) / 10,
+          high: Math.round(dailyFP1K[highIdx] * 10) / 10,
+        };
+      } else {
+        fp1kRange = {
+          low: Math.round(Math.min(...dailyFP1K) * 10) / 10,
+          high: Math.round(Math.max(...dailyFP1K) * 10) / 10,
+        };
+      }
+    }
+
+    // Calculate yearly stats from ALL horses
+    const yearlyDates = new Set<string>();
+    let winsYearly = 0;
+    let placesYearly = 0;
+    let showsYearly = 0;
+    
+    connHorsesAll.forEach(h => {
+      yearlyDates.add(h.date);
+      if (h.finish === 1) winsYearly++;
+      else if (h.finish === 2) placesYearly++;
+      else if (h.finish === 3) showsYearly++;
+    });
+
+    return {
+      fp1k: Math.round(fp1k * 10) / 10,
+      fp1kRange,
+      startsYearly: connHorsesAll.length,
+      winsYearly,
+      placesYearly,
+      showsYearly,
+    };
+  };
+
   // Add jockeys
   data.jockeys.forEach((conn, key) => {
     if (key.startsWith(date)) {
       const stats90d = data.stats.jockeys.get(conn.name);
       const connectionStats = calculateConnectionStats(conn.name, 'jockey');
+      const fp1kStats = calculateFP1KStats(conn.name, 'jockey');
       
       if (!seenConnections.has(conn.id)) {
         connections.push({
           ...conn,
           avpa90d: stats90d?.avpa90d || conn.trackAvpa || 0,
           ...connectionStats,
+          ...fp1kStats,
         });
         seenConnections.add(conn.id);
       }
@@ -389,12 +514,14 @@ export async function getDataForDate(date: string, trackCode: string = 'AQU') {
     if (key.startsWith(date)) {
       const stats90d = data.stats.trainers.get(conn.name);
       const connectionStats = calculateConnectionStats(conn.name, 'trainer');
+      const fp1kStats = calculateFP1KStats(conn.name, 'trainer');
       
       if (!seenConnections.has(conn.id)) {
         connections.push({
           ...conn,
           avpa90d: stats90d?.avpa90d || conn.trackAvpa || 0,
           ...connectionStats,
+          ...fp1kStats,
         });
         seenConnections.add(conn.id);
       }
@@ -406,12 +533,14 @@ export async function getDataForDate(date: string, trackCode: string = 'AQU') {
     if (key.startsWith(date)) {
       const stats90d = data.stats.sires.get(conn.name);
       const connectionStats = calculateConnectionStats(conn.name, 'sire');
+      const fp1kStats = calculateFP1KStats(conn.name, 'sire');
       
       if (!seenConnections.has(conn.id)) {
         connections.push({
           ...conn,
           avpa90d: stats90d?.avpa90d || conn.trackAvpa || 0,
           ...connectionStats,
+          ...fp1kStats,
         });
         seenConnections.add(conn.id);
       }
@@ -419,6 +548,14 @@ export async function getDataForDate(date: string, trackCode: string = 'AQU') {
   });
 
   return { races, connections, horses: dayHorses, oddsBucketStats: data.oddsBucketStats };
+}
+
+// Helper function to format date as YYYY-MM-DD using local time
+function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**

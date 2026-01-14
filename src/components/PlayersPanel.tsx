@@ -45,7 +45,7 @@ export function PlayersPanel() {
   } = useGame();
   
   const [filter, setFilter] = useState<FilterType>('all');
-  const [sortBy, setSortBy] = useState<'salary' | 'apps' | 'avgOdds' | 'name'>('salary');
+  const [sortBy, setSortBy] = useState<'salary' | 'apps' | 'avgOdds' | 'fp1k' | 'name'>('salary');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   // Filter connections based on selected horses
@@ -89,6 +89,9 @@ export function PlayersPanel() {
           break;
         case 'avgOdds':
           comparison = a.avgOdds - b.avgOdds;
+          break;
+        case 'fp1k':
+          comparison = a.fp1k - b.fp1k;
           break;
         case 'name':
           comparison = a.name.localeCompare(b.name);
@@ -168,7 +171,7 @@ export function PlayersPanel() {
       </div>
 
       {/* Table Header */}
-      <div className="grid grid-cols-[auto_1fr_80px_60px_80px_40px] gap-2 px-3 py-2 text-xs font-medium text-muted uppercase tracking-wider border-b border-border flex-shrink-0">
+      <div className="grid grid-cols-[auto_1fr_80px_50px_65px_55px_40px] gap-2 px-3 py-2 text-xs font-medium text-muted uppercase tracking-wider border-b border-border flex-shrink-0">
         <div></div>
         <button onClick={() => handleSort('name')} className="text-left hover:text-primary">
           Player {sortBy === 'name' && (sortDir === 'asc' ? '↑' : '↓')}
@@ -180,7 +183,10 @@ export function PlayersPanel() {
           App. {sortBy === 'apps' && (sortDir === 'asc' ? '↑' : '↓')}
         </button>
         <button onClick={() => handleSort('avgOdds')} className="text-right hover:text-primary">
-          Avg. Odds {sortBy === 'avgOdds' && (sortDir === 'asc' ? '↑' : '↓')}
+          Odds {sortBy === 'avgOdds' && (sortDir === 'asc' ? '↑' : '↓')}
+        </button>
+        <button onClick={() => handleSort('fp1k')} className="text-right hover:text-primary">
+          FP1K {sortBy === 'fp1k' && (sortDir === 'asc' ? '↑' : '↓')}
         </button>
         <div></div>
       </div>
@@ -198,7 +204,7 @@ export function PlayersPanel() {
           return (
             <div
               key={conn.id}
-              className={`grid grid-cols-[auto_1fr_80px_60px_80px_40px] gap-2 px-3 py-3 items-center transition-colors ${
+              className={`grid grid-cols-[auto_1fr_80px_50px_65px_55px_40px] gap-2 px-3 py-3 items-center transition-colors ${
                 isScratched
                   ? 'opacity-40'
                   : isPicked 
@@ -233,7 +239,7 @@ export function PlayersPanel() {
                   {isFiltering && <span className="ml-1 text-xs text-accent font-normal">(filtering)</span>}
                 </div>
                 <div className="text-xs text-muted">
-                  {conn.wins}-{conn.places}-{conn.shows} • μ: {conn.muSmooth.toFixed(0)}
+                  {conn.startsYearly}-{conn.winsYearly}-{conn.placesYearly}-{conn.showsYearly}
                 </div>
               </button>
 
@@ -246,7 +252,12 @@ export function PlayersPanel() {
               <div className="text-right text-muted">{conn.apps.toString().padStart(2, '0')}</div>
 
               {/* Avg Odds */}
-              <div className="text-right text-muted">{conn.avgOdds.toFixed(2)}</div>
+              <div className="text-right text-muted">{conn.avgOdds.toFixed(1)}</div>
+
+              {/* FP1K */}
+              <div className={`text-right font-medium ${conn.fp1k >= 10 ? 'text-emerald-500' : conn.fp1k >= 8 ? 'text-text-primary' : 'text-text-muted'}`}>
+                {conn.fp1k > 0 ? conn.fp1k.toFixed(1) : '—'}
+              </div>
 
               {/* Add/Remove Button - Fixed visibility for light mode */}
               <button
