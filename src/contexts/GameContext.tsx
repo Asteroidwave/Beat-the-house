@@ -21,8 +21,7 @@ import {
   calculateLineupStatsWithStacking,
   getAvailableDates,
   getAvailableTracks,
-  AVAILABLE_TRACKS,
-} from '@/lib/parseExcel';
+} from '@/lib/parseData';
 import { calculateTargets, determineAchievedTier } from '@/lib/oddsStatistics';
 
 const SALARY_MIN = 20000;
