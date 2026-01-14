@@ -3,6 +3,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, MapPin, X } from 'lucide-react';
 
+// Format date as YYYY-MM-DD using LOCAL time (not UTC)
+function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 interface TrackDatePickerProps {
   availableTracks: { code: string; name: string; dates: string[] }[];
   selectedTrack: string;
@@ -108,7 +116,7 @@ export function TrackDatePicker({
     // Current month days
     for (let day = 1; day <= lastDay.getDate(); day++) {
       const date = new Date(currentMonth.year, currentMonth.month, day);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = formatDateLocal(date);
       const hasRaces = availableDatesSet.has(dateStr);
       const isSelected = dateStr === selectedDate;
       
@@ -149,7 +157,7 @@ export function TrackDatePicker({
   
   const handleDateSelect = (day: typeof calendarDays[0]) => {
     if (!day.hasRaces || !day.isCurrentMonth) return;
-    const dateStr = day.date.toISOString().split('T')[0];
+    const dateStr = formatDateLocal(day.date);
     onDateChange(dateStr);
     onClose();
   };
