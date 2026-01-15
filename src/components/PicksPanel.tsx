@@ -49,7 +49,6 @@ export function PicksPanel() {
   const salaryProgress = Math.min((lineupStats.totalSalary / salaryMax) * 100, 100);
   const isAboveMin = lineupStats.totalSalary >= salaryMin;
   const isAtMax = lineupStats.totalSalary === salaryMax;
-  const isInRange = lineupStats.totalSalary >= salaryMin && lineupStats.totalSalary < salaryMax;
 
   // Get salary bar color - green when at $20k+, purple at exactly $50k
   const getSalaryBarColor = () => {
@@ -62,7 +61,7 @@ export function PicksPanel() {
   const getSalaryTextColor = () => {
     if (isAtMax) return 'text-purple-500';
     if (isAboveMin) return 'text-emerald-500';
-    return 'text-text-secondary';
+    return 'text-text-primary';
   };
   
   // Handle stake input change
@@ -95,6 +94,9 @@ export function PicksPanel() {
     }
   };
 
+  // Calculate $20k marker position (40% of the bar since 20k is 40% of 50k)
+  const minMarkerPos = (salaryMin / salaryMax) * 100;
+
   return (
     <div className="panel flex flex-col h-full">
       {/* Header */}
@@ -102,7 +104,7 @@ export function PicksPanel() {
         <h2 className="text-lg font-bold text-text-primary">Your Picks</h2>
       </div>
       
-      {/* Compact Stats Row */}
+      {/* Compact Stats Row with Horses | Conn */}
       <div className="flex-shrink-0 px-3 py-2 border-b border-border bg-surface-elevated/50">
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-1">
@@ -110,8 +112,10 @@ export function PicksPanel() {
             <span className="font-bold text-text-primary">{picks.length}</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-text-muted">Apps</span>
-            <span className="font-bold text-text-primary">{lineupStats.totalApps}</span>
+            <span className="text-text-muted">H|C</span>
+            <span className="font-bold text-text-primary">
+              {lineupStats.uniqueHorses}|{lineupStats.totalApps}
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <span className="text-text-muted">Odds</span>
@@ -126,17 +130,18 @@ export function PicksPanel() {
         </div>
       </div>
       
-      {/* FP1K Calculator / Estimated Points */}
+      {/* Expected Points & Typical Range */}
       {picks.length > 0 && (
         <div className="flex-shrink-0 px-3 py-2 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="text-xs">
-              <span className="text-text-muted">Est. Points</span>
+              <span className="text-text-muted">Expected</span>
               <span className="ml-2 font-bold text-lg text-accent">{lineupStats.estimatedPoints}</span>
+              <span className="ml-1 text-text-muted text-[10px]">pts</span>
             </div>
             <div className="text-xs text-right">
-              <span className="text-text-muted">FP1K Range</span>
-              <span className="ml-2 font-medium text-text-secondary">
+              <span className="text-text-muted">Typical Range</span>
+              <span className="ml-2 font-semibold text-text-primary">
                 {lineupStats.rangeFloor.toFixed(1)} → {lineupStats.rangeCeiling.toFixed(1)}
               </span>
             </div>
@@ -147,36 +152,45 @@ export function PicksPanel() {
         </div>
       )}
       
-      {/* Salary Progress Bar */}
-      <div className="flex-shrink-0 px-3 py-2 border-b border-border">
-        <div className="flex items-center justify-between text-xs mb-1.5">
-          <span className="text-text-muted">Salary Cap</span>
-          <span className={`font-semibold ${getSalaryTextColor()}`}>
-            ${lineupStats.totalSalary.toLocaleString()} / ${salaryMax.toLocaleString()}
+      {/* Salary Cap - Redesigned with $0 → $20k → $50k */}
+      <div className="flex-shrink-0 px-3 py-3 border-b border-border">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-text-muted">Salary Cap</span>
+          <span className={`text-lg font-bold ${getSalaryTextColor()}`}>
+            ${lineupStats.totalSalary.toLocaleString()}
           </span>
         </div>
-        <div className="relative h-2 bg-surface-hover rounded-full overflow-hidden">
-          {/* Min threshold marker */}
+        
+        {/* Progress bar with markers */}
+        <div className="relative">
+          <div className="h-3 bg-surface-hover rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${getSalaryBarColor()}`}
+              style={{ width: `${salaryProgress}%` }}
+            />
+          </div>
+          
+          {/* $20k marker line */}
           <div 
-            className="absolute top-0 bottom-0 w-0.5 bg-text-muted z-10"
-            style={{ left: `${(salaryMin / salaryMax) * 100}%` }}
+            className="absolute top-0 bottom-0 w-0.5 bg-text-muted/50"
+            style={{ left: `${minMarkerPos}%` }}
           />
-          {/* Progress */}
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${getSalaryBarColor()}`}
-            style={{ width: `${salaryProgress}%` }}
-          />
-        </div>
-        <div className="flex justify-between text-[10px] text-text-muted mt-1">
-          <span>${(salaryMin / 1000).toFixed(0)}k min</span>
-          <span>${(salaryMax / 1000).toFixed(0)}k max</span>
         </div>
         
-        {/* Clear All Button - below salary cap */}
+        {/* Labels: $0, $20k, $50k */}
+        <div className="flex justify-between text-[10px] text-text-muted mt-1.5 relative">
+          <span>$0</span>
+          <span className="absolute" style={{ left: `${minMarkerPos}%`, transform: 'translateX(-50%)' }}>
+            $20k
+          </span>
+          <span>$50k</span>
+        </div>
+        
+        {/* Clear All Button */}
         {picks.length > 0 && (
           <button
             onClick={clearPicks}
-            className="mt-2 w-full py-1.5 text-xs text-red-500 hover:text-white hover:bg-red-500 border border-red-300 dark:border-red-500/30 rounded-lg transition-all flex items-center justify-center gap-1"
+            className="mt-3 w-full py-1.5 text-xs text-red-500 hover:text-white hover:bg-red-500 border border-red-300 dark:border-red-500/30 rounded-lg transition-all flex items-center justify-center gap-1"
           >
             <Trash2 className="w-3 h-3" />
             Clear All Picks
@@ -184,10 +198,10 @@ export function PicksPanel() {
         )}
       </div>
       
-      {/* Scrollable Picks List - Shows salary, apps, avg odds instead of μ/σ */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-3 py-2">
+      {/* Picks List - Box Score Style with Columns */}
+      <div className="flex-1 overflow-y-auto min-h-0">
         {picks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center py-8">
+          <div className="flex flex-col items-center justify-center h-full text-center py-8 px-3">
             <div className="w-12 h-12 rounded-full bg-surface-elevated flex items-center justify-center mb-3">
               <Users className="w-6 h-6 text-text-muted" />
             </div>
@@ -195,33 +209,68 @@ export function PicksPanel() {
             <p className="text-xs text-text-muted mt-1">Select connections from the panels</p>
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="text-[10px]">
+            {/* Table Header */}
+            <div className="grid grid-cols-[auto_1fr_55px_35px_40px_45px_30px] gap-1 px-2 py-1.5 bg-surface-elevated/50 border-b border-border text-text-muted uppercase font-semibold sticky top-0">
+              <div></div>
+              <div>Name</div>
+              <div className="text-right">Salary</div>
+              <div className="text-right">App</div>
+              <div className="text-right">FP1K</div>
+              <div className="text-right">Range</div>
+              <div></div>
+            </div>
+            
+            {/* Table Rows */}
             {picks.map((pick) => {
               const colors = roleColors[pick.connection.role];
               return (
                 <div
                   key={pick.connection.id}
-                  className="flex items-center gap-2 p-2 bg-surface-elevated rounded-lg group"
+                  className="grid grid-cols-[auto_1fr_55px_35px_40px_45px_30px] gap-1 px-2 py-2 items-center border-b border-border/50 hover:bg-surface-elevated/30 group"
                 >
-                  <div className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold ${colors.bg} text-white`}>
+                  {/* Role Badge */}
+                  <div className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${colors.bg} text-white`}>
                     {roleLabels[pick.connection.role]}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text-primary truncate">{pick.connection.name}</p>
-                    <p className="text-[10px] text-text-muted">
-                      ${pick.connection.salary.toLocaleString()} • {pick.connection.apps} apps • FP1K: {pick.connection.fp1k > 0 ? pick.connection.fp1k.toFixed(1) : '—'}
+                  
+                  {/* Name */}
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-text-primary truncate">{pick.connection.name}</p>
+                    <p className="text-[9px] text-text-muted truncate">
+                      {pick.connection.startsYearly}-{pick.connection.winsYearly}-{pick.connection.placesYearly}-{pick.connection.showsYearly}
                     </p>
                   </div>
-                  <div className="text-right mr-1">
-                    <p className="text-[10px] text-text-muted">
-                      {pick.connection.fp1kRange.low > 0 ? `${pick.connection.fp1kRange.low}→${pick.connection.fp1kRange.high}` : '—'}
-                    </p>
+                  
+                  {/* Salary */}
+                  <div className="text-right font-semibold text-text-primary">
+                    ${(pick.connection.salary / 1000).toFixed(1)}k
                   </div>
+                  
+                  {/* Apps */}
+                  <div className="text-right text-text-secondary font-medium">
+                    {pick.connection.apps.toString().padStart(2, '0')}
+                  </div>
+                  
+                  {/* FP1K */}
+                  <div className={`text-right font-semibold ${pick.connection.fp1k >= 10 ? 'text-emerald-500' : 'text-text-primary'}`}>
+                    {pick.connection.fp1k > 0 ? pick.connection.fp1k.toFixed(1) : '—'}
+                  </div>
+                  
+                  {/* Range */}
+                  <div className="text-right text-text-muted text-[9px]">
+                    {pick.connection.fp1kRange.low > 0 
+                      ? `${pick.connection.fp1kRange.low.toFixed(0)}-${pick.connection.fp1kRange.high.toFixed(0)}`
+                      : '—'
+                    }
+                  </div>
+                  
+                  {/* Remove Button */}
                   <button
                     onClick={() => removePick(pick.connection.id)}
-                    className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-error/20 text-error transition-all"
+                    className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-error/20 text-error transition-all flex items-center justify-center"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <X className="w-3 h-3" />
                   </button>
                 </div>
               );
@@ -282,7 +331,7 @@ export function PicksPanel() {
           </div>
         </div>
         
-        {/* Play Button - No Clear All Picks */}
+        {/* Play Button */}
         <div className="px-3 py-3">
           <button
             onClick={play}
