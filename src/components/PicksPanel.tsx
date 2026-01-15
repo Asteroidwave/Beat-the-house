@@ -135,9 +135,9 @@ export function PicksPanel() {
               <span className="ml-2 font-bold text-lg text-accent">{lineupStats.estimatedPoints}</span>
             </div>
             <div className="text-xs text-right">
-              <span className="text-text-muted">Range</span>
+              <span className="text-text-muted">FP1K Range</span>
               <span className="ml-2 font-medium text-text-secondary">
-                {lineupStats.rangeFloor} → {lineupStats.rangeCeiling}
+                {lineupStats.rangeFloor.toFixed(1)} → {lineupStats.rangeCeiling.toFixed(1)}
               </span>
             </div>
           </div>

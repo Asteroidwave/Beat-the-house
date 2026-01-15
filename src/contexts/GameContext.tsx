@@ -297,13 +297,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     // Estimated points = FP1K * (totalSalary / 1000)
     const estimatedPoints = fp1k * (totalSalary / 1000);
     
-    // Calculate lineup range (aggregate of individual ranges weighted by salary)
+    // Calculate lineup FP1K range (weighted average of individual FP1K ranges by salary)
     const totalWeightedFloor = picks.reduce((sum, p) => sum + p.connection.fp1kRange.low * p.connection.salary, 0);
     const totalWeightedCeiling = picks.reduce((sum, p) => sum + p.connection.fp1kRange.high * p.connection.salary, 0);
-    const rangeFloorFP1K = totalSalary > 0 ? totalWeightedFloor / totalSalary : 0;
-    const rangeCeilingFP1K = totalSalary > 0 ? totalWeightedCeiling / totalSalary : 0;
-    const rangeFloor = rangeFloorFP1K * (totalSalary / 1000);
-    const rangeCeiling = rangeCeilingFP1K * (totalSalary / 1000);
+    const rangeFloor = totalSalary > 0 ? totalWeightedFloor / totalSalary : 0;
+    const rangeCeiling = totalSalary > 0 ? totalWeightedCeiling / totalSalary : 0;
     
     // Calculate μ/σ with stacking adjustment
     const stackingStats = calculateLineupStatsWithStacking(picks.map(p => p.connection));
@@ -315,8 +313,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       expectedPoints,
       fp1k: Math.round(fp1k * 10) / 10,
       estimatedPoints: Math.round(estimatedPoints),
-      rangeFloor: Math.round(rangeFloor),
-      rangeCeiling: Math.round(rangeCeiling),
+      rangeFloor: Math.round(rangeFloor * 10) / 10,
+      rangeCeiling: Math.round(rangeCeiling * 10) / 10,
       ...stackingStats,
     };
   }, [picks]);
