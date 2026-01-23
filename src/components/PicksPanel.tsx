@@ -211,23 +211,36 @@ export function PicksPanel() {
         ) : (
           <div className="text-[10px]">
             {/* Table Header */}
-            <div className="grid grid-cols-[auto_1fr_55px_35px_40px_45px_30px] gap-1 px-2 py-1.5 bg-surface-elevated/50 border-b border-border text-text-muted uppercase font-semibold sticky top-0">
+            <div className="grid grid-cols-[auto_1fr_50px_30px_35px_35px_38px_40px_32px_32px_28px_28px] gap-0.5 px-2 py-1.5 bg-surface-elevated/50 border-b border-border text-text-muted uppercase font-semibold sticky top-0">
               <div></div>
               <div>Name</div>
-              <div className="text-right">Salary</div>
+              <div className="text-right">Sal</div>
               <div className="text-right">App</div>
+              <div className="text-right">Odds</div>
+              <div className="text-right">μ</div>
               <div className="text-right">FP1K</div>
-              <div className="text-right">Range</div>
+              <div className="text-right">Rng</div>
+              <div className="text-right">W%</div>
+              <div className="text-right">ITM</div>
+              <div className="text-right">#H</div>
               <div></div>
             </div>
             
             {/* Table Rows */}
             {picks.map((pick) => {
               const colors = roleColors[pick.connection.role];
+              const winPct = pick.connection.startsYearly > 0 
+                ? (pick.connection.winsYearly / pick.connection.startsYearly) * 100 
+                : 0;
+              const itmPct = pick.connection.startsYearly > 0
+                ? ((pick.connection.winsYearly + pick.connection.placesYearly + pick.connection.showsYearly) / pick.connection.startsYearly) * 100
+                : 0;
+              const horseCount = pick.connection.horseIds?.length || 0;
+              
               return (
                 <div
                   key={pick.connection.id}
-                  className="grid grid-cols-[auto_1fr_55px_35px_40px_45px_30px] gap-1 px-2 py-2 items-center border-b border-border/50 hover:bg-surface-elevated/30 group"
+                  className="grid grid-cols-[auto_1fr_50px_30px_35px_35px_38px_40px_32px_32px_28px_28px] gap-0.5 px-2 py-2 items-center border-b border-border/50 hover:bg-surface-elevated/30 group"
                 >
                   {/* Role Badge */}
                   <div className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${colors.bg} text-white`}>
@@ -243,13 +256,23 @@ export function PicksPanel() {
                   </div>
                   
                   {/* Salary */}
-                  <div className="text-right font-semibold text-text-primary">
+                  <div className="text-right font-semibold text-text-primary text-[10px]">
                     ${(pick.connection.salary / 1000).toFixed(1)}k
                   </div>
                   
                   {/* Apps */}
                   <div className="text-right text-text-secondary font-medium">
                     {pick.connection.apps.toString().padStart(2, '0')}
+                  </div>
+                  
+                  {/* Odds */}
+                  <div className="text-right text-text-primary font-medium">
+                    {pick.connection.avgOdds ? pick.connection.avgOdds.toFixed(1) : '—'}
+                  </div>
+                  
+                  {/* μ (Expected Points) */}
+                  <div className="text-right text-text-primary font-medium">
+                    {pick.connection.mu ? pick.connection.mu.toFixed(1) : '—'}
                   </div>
                   
                   {/* FP1K */}
@@ -263,6 +286,21 @@ export function PicksPanel() {
                       ? `${pick.connection.fp1kRange.low.toFixed(0)}-${pick.connection.fp1kRange.high.toFixed(0)}`
                       : '—'
                     }
+                  </div>
+                  
+                  {/* Win% */}
+                  <div className="text-right text-text-primary font-medium">
+                    {winPct > 0 ? winPct.toFixed(0) : '0'}
+                  </div>
+                  
+                  {/* ITM% */}
+                  <div className="text-right text-text-primary font-medium">
+                    {itmPct > 0 ? itmPct.toFixed(0) : '0'}
+                  </div>
+                  
+                  {/* Horse Count */}
+                  <div className="text-right text-text-primary font-medium">
+                    {horseCount}
                   </div>
                   
                   {/* Remove Button */}
