@@ -212,16 +212,16 @@ export function PicksPanel() {
           <div className="text-[10px]">
             {/* Table Header */}
             <div className="grid grid-cols-[auto_1fr_50px_30px_35px_35px_38px_40px_35px_35px_auto] gap-0 px-2 py-1.5 bg-surface-elevated/50 border-b border-border text-text-muted uppercase font-semibold sticky top-0">
-              <div className="border-r border-border/30 pr-1"></div>
-              <div className="border-r border-border/30 px-1">Name</div>
-              <div className="text-right border-r border-border/30 px-1">Sal</div>
-              <div className="text-right border-r border-border/30 px-1">App</div>
-              <div className="text-right border-r border-border/30 px-1">Odds</div>
-              <div className="text-right border-r border-border/30 px-1">μ</div>
-              <div className="text-right border-r border-border/30 px-1">FP1K</div>
-              <div className="text-right border-r border-border/30 px-1">Rng</div>
-              <div className="text-right border-r border-border/30 px-1">W%</div>
-              <div className="text-right border-r border-border/30 px-1">ITM%</div>
+              <div className="pr-1"></div>
+              <div className="px-1">Name</div>
+              <div className="text-right px-1">Sal</div>
+              <div className="text-right px-1">App</div>
+              <div className="text-right px-1">Odds</div>
+              <div className="text-right px-1">μ</div>
+              <div className="text-right px-1">FP1K</div>
+              <div className="text-right px-1">Rng</div>
+              <div className="text-right px-1">W%</div>
+              <div className="text-right px-1">ITM%</div>
               <div className="pl-1"></div>
             </div>
             
@@ -241,12 +241,12 @@ export function PicksPanel() {
                   className="grid grid-cols-[auto_1fr_50px_30px_35px_35px_38px_40px_35px_35px_auto] gap-0 px-2 py-2 items-center border-b border-border/50 hover:bg-surface-elevated/30 group"
                 >
                   {/* Role Badge */}
-                  <div className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${colors.bg} text-white border-r border-border/30 pr-1`}>
+                  <div className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${colors.bg} text-white pr-1`}>
                     {roleLabels[pick.connection.role]}
                   </div>
                   
                   {/* Name */}
-                  <div className="min-w-0 border-r border-border/30 px-1">
+                  <div className="min-w-0 px-1">
                     <p className="text-xs font-semibold text-text-primary truncate">{pick.connection.name}</p>
                     <p className="text-[9px] text-text-muted truncate">
                       {pick.connection.startsYearly}-{pick.connection.winsYearly}-{pick.connection.placesYearly}-{pick.connection.showsYearly}
@@ -254,32 +254,32 @@ export function PicksPanel() {
                   </div>
                   
                   {/* Salary */}
-                  <div className="text-right font-semibold text-text-primary text-[10px] border-r border-border/30 px-1">
+                  <div className="text-right font-semibold text-text-primary text-[10px] px-1">
                     ${(pick.connection.salary / 1000).toFixed(1)}k
                   </div>
                   
                   {/* Apps */}
-                  <div className="text-right text-text-secondary font-medium border-r border-border/30 px-1">
+                  <div className="text-right text-text-secondary font-medium px-1">
                     {pick.connection.apps.toString().padStart(2, '0')}
                   </div>
                   
                   {/* Odds */}
-                  <div className="text-right text-text-primary font-medium border-r border-border/30 px-1">
+                  <div className="text-right text-text-primary font-medium px-1">
                     {pick.connection.avgOdds ? pick.connection.avgOdds.toFixed(1) : '—'}
                   </div>
                   
                   {/* μ (Expected Points) */}
-                  <div className="text-right text-text-primary font-medium border-r border-border/30 px-1">
+                  <div className="text-right text-text-primary font-medium px-1">
                     {pick.connection.mu ? pick.connection.mu.toFixed(1) : '—'}
                   </div>
                   
                   {/* FP1K */}
-                  <div className={`text-right font-semibold border-r border-border/30 px-1 ${pick.connection.fp1k >= 10 ? 'text-emerald-500' : 'text-text-primary'}`}>
+                  <div className={`text-right font-semibold px-1 ${pick.connection.fp1k >= 10 ? 'text-emerald-500' : 'text-text-primary'}`}>
                     {pick.connection.fp1k > 0 ? pick.connection.fp1k.toFixed(1) : '—'}
                   </div>
                   
                   {/* Range */}
-                  <div className="text-right text-text-muted text-[9px] border-r border-border/30 px-1">
+                  <div className="text-right text-text-muted text-[9px] px-1">
                     {pick.connection.fp1kRange.low > 0 
                       ? `${pick.connection.fp1kRange.low.toFixed(0)}-${pick.connection.fp1kRange.high.toFixed(0)}`
                       : '—'
@@ -287,12 +287,12 @@ export function PicksPanel() {
                   </div>
                   
                   {/* Win% */}
-                  <div className="text-right text-text-primary font-medium border-r border-border/30 px-1">
+                  <div className="text-right text-text-primary font-medium px-1">
                     {winPct > 0 ? `${winPct.toFixed(0)}%` : '0%'}
                   </div>
                   
                   {/* ITM% */}
-                  <div className="text-right text-text-primary font-medium border-r border-border/30 px-1">
+                  <div className="text-right text-text-primary font-medium px-1">
                     {itmPct > 0 ? `${itmPct.toFixed(0)}%` : '0%'}
                   </div>
                   
