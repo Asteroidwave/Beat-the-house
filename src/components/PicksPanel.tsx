@@ -211,19 +211,18 @@ export function PicksPanel() {
         ) : (
           <div className="text-[10px]">
             {/* Table Header */}
-            <div className="grid grid-cols-[auto_1fr_50px_30px_35px_35px_38px_40px_32px_32px_28px_28px] gap-0.5 px-2 py-1.5 bg-surface-elevated/50 border-b border-border text-text-muted uppercase font-semibold sticky top-0">
-              <div></div>
-              <div>Name</div>
-              <div className="text-right">Sal</div>
-              <div className="text-right">App</div>
-              <div className="text-right">Odds</div>
-              <div className="text-right">μ</div>
-              <div className="text-right">FP1K</div>
-              <div className="text-right">Rng</div>
-              <div className="text-right">W%</div>
-              <div className="text-right">ITM</div>
-              <div className="text-right">#H</div>
-              <div></div>
+            <div className="grid grid-cols-[auto_1fr_50px_30px_35px_35px_38px_40px_35px_35px_auto] gap-0 px-2 py-1.5 bg-surface-elevated/50 border-b border-border text-text-muted uppercase font-semibold sticky top-0">
+              <div className="border-r border-border/30 pr-1"></div>
+              <div className="border-r border-border/30 px-1">Name</div>
+              <div className="text-right border-r border-border/30 px-1">Sal</div>
+              <div className="text-right border-r border-border/30 px-1">App</div>
+              <div className="text-right border-r border-border/30 px-1">Odds</div>
+              <div className="text-right border-r border-border/30 px-1">μ</div>
+              <div className="text-right border-r border-border/30 px-1">FP1K</div>
+              <div className="text-right border-r border-border/30 px-1">Rng</div>
+              <div className="text-right border-r border-border/30 px-1">W%</div>
+              <div className="text-right border-r border-border/30 px-1">ITM%</div>
+              <div className="pl-1"></div>
             </div>
             
             {/* Table Rows */}
@@ -235,20 +234,19 @@ export function PicksPanel() {
               const itmPct = pick.connection.startsYearly > 0
                 ? ((pick.connection.winsYearly + pick.connection.placesYearly + pick.connection.showsYearly) / pick.connection.startsYearly) * 100
                 : 0;
-              const horseCount = pick.connection.horseIds?.length || 0;
               
               return (
                 <div
                   key={pick.connection.id}
-                  className="grid grid-cols-[auto_1fr_50px_30px_35px_35px_38px_40px_32px_32px_28px_28px] gap-0.5 px-2 py-2 items-center border-b border-border/50 hover:bg-surface-elevated/30 group"
+                  className="grid grid-cols-[auto_1fr_50px_30px_35px_35px_38px_40px_35px_35px_auto] gap-0 px-2 py-2 items-center border-b border-border/50 hover:bg-surface-elevated/30 group"
                 >
                   {/* Role Badge */}
-                  <div className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${colors.bg} text-white`}>
+                  <div className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${colors.bg} text-white border-r border-border/30 pr-1`}>
                     {roleLabels[pick.connection.role]}
                   </div>
                   
                   {/* Name */}
-                  <div className="min-w-0">
+                  <div className="min-w-0 border-r border-border/30 px-1">
                     <p className="text-xs font-semibold text-text-primary truncate">{pick.connection.name}</p>
                     <p className="text-[9px] text-text-muted truncate">
                       {pick.connection.startsYearly}-{pick.connection.winsYearly}-{pick.connection.placesYearly}-{pick.connection.showsYearly}
@@ -256,32 +254,32 @@ export function PicksPanel() {
                   </div>
                   
                   {/* Salary */}
-                  <div className="text-right font-semibold text-text-primary text-[10px]">
+                  <div className="text-right font-semibold text-text-primary text-[10px] border-r border-border/30 px-1">
                     ${(pick.connection.salary / 1000).toFixed(1)}k
                   </div>
                   
                   {/* Apps */}
-                  <div className="text-right text-text-secondary font-medium">
+                  <div className="text-right text-text-secondary font-medium border-r border-border/30 px-1">
                     {pick.connection.apps.toString().padStart(2, '0')}
                   </div>
                   
                   {/* Odds */}
-                  <div className="text-right text-text-primary font-medium">
+                  <div className="text-right text-text-primary font-medium border-r border-border/30 px-1">
                     {pick.connection.avgOdds ? pick.connection.avgOdds.toFixed(1) : '—'}
                   </div>
                   
                   {/* μ (Expected Points) */}
-                  <div className="text-right text-text-primary font-medium">
+                  <div className="text-right text-text-primary font-medium border-r border-border/30 px-1">
                     {pick.connection.mu ? pick.connection.mu.toFixed(1) : '—'}
                   </div>
                   
                   {/* FP1K */}
-                  <div className={`text-right font-semibold ${pick.connection.fp1k >= 10 ? 'text-emerald-500' : 'text-text-primary'}`}>
+                  <div className={`text-right font-semibold border-r border-border/30 px-1 ${pick.connection.fp1k >= 10 ? 'text-emerald-500' : 'text-text-primary'}`}>
                     {pick.connection.fp1k > 0 ? pick.connection.fp1k.toFixed(1) : '—'}
                   </div>
                   
                   {/* Range */}
-                  <div className="text-right text-text-muted text-[9px]">
+                  <div className="text-right text-text-muted text-[9px] border-r border-border/30 px-1">
                     {pick.connection.fp1kRange.low > 0 
                       ? `${pick.connection.fp1kRange.low.toFixed(0)}-${pick.connection.fp1kRange.high.toFixed(0)}`
                       : '—'
@@ -289,24 +287,19 @@ export function PicksPanel() {
                   </div>
                   
                   {/* Win% */}
-                  <div className="text-right text-text-primary font-medium">
-                    {winPct > 0 ? winPct.toFixed(0) : '0'}
+                  <div className="text-right text-text-primary font-medium border-r border-border/30 px-1">
+                    {winPct > 0 ? `${winPct.toFixed(0)}%` : '0%'}
                   </div>
                   
                   {/* ITM% */}
-                  <div className="text-right text-text-primary font-medium">
-                    {itmPct > 0 ? itmPct.toFixed(0) : '0'}
-                  </div>
-                  
-                  {/* Horse Count */}
-                  <div className="text-right text-text-primary font-medium">
-                    {horseCount}
+                  <div className="text-right text-text-primary font-medium border-r border-border/30 px-1">
+                    {itmPct > 0 ? `${itmPct.toFixed(0)}%` : '0%'}
                   </div>
                   
                   {/* Remove Button */}
                   <button
                     onClick={() => removePick(pick.connection.id)}
-                    className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-error/20 text-error transition-all flex items-center justify-center"
+                    className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-red-500 transition-all flex items-center justify-center pl-1"
                   >
                     <X className="w-3 h-3" />
                   </button>
